@@ -9,6 +9,10 @@ export default function Home() {
   const [lists, setLists] = useState<ListType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // State for adding a new list
+  const [isAddingList, setIsAddingList] = useState(false);
+  const [newListTitle, setNewListTitle] = useState('');
 
   // Fetch lists from Supabase when the page loads
   useEffect(() => {
@@ -35,6 +39,54 @@ export default function Home() {
 
     fetchLists();
   }, []);
+
+  // Create a new list
+  async function handleCreateList() {
+    // Don't create if title is empty
+    if (!newListTitle.trim()) {
+      return;
+    }
+
+    // Calculate position for new list (at the end)
+    const newPosition = lists.length;
+
+    // Save to Supabase
+    const { data, error } = await supabase
+      .from('lists')
+      .insert({
+        title: newListTitle.trim(),
+        position: newPosition,
+        width: 300,
+        archived: false,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating list:', error);
+      return;
+    }
+
+    // Add new list to state (updates UI immediately)
+    if (data) {
+      setLists([...lists, data]);
+    }
+
+    // Reset the form
+    setNewListTitle('');
+    setIsAddingList(false);
+  }
+
+  // Handle pressing Enter key
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') {
+      handleCreateList();
+    }
+    if (e.key === 'Escape') {
+      setNewListTitle('');
+      setIsAddingList(false);
+    }
+  }
 
   // Show loading state
   if (loading) {
@@ -69,17 +121,46 @@ export default function Home() {
             <List key={list.id} list={list} />
           ))}
 
-          {/* Show message if no lists */}
-          {lists.length === 0 && (
-            <div className="text-gray-500 p-4">
-              No lists yet. Add your first list to get started!
+          {/* Add List Section */}
+          {isAddingList ? (
+            // Show input form when adding a list
+            <div className="flex-shrink-0 w-72 bg-gray-100 rounded-lg p-2">
+              <input
+                type="text"
+                placeholder="Enter list title..."
+                value={newListTitle}
+                onChange={(e) => setNewListTitle(e.target.value)}
+                onKeyDown={handleKeyDown}
+                autoFocus
+                className="w-full p-2 rounded border border-gray-300 focus:outline-none focus:border-blue-500"
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={handleCreateList}
+                  className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors"
+                >
+                  Add list
+                </button>
+                <button
+                  onClick={() => {
+                    setNewListTitle('');
+                    setIsAddingList(false);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 px-2"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
+          ) : (
+            // Show button when not adding
+            <button
+              onClick={() => setIsAddingList(true)}
+              className="flex-shrink-0 w-72 bg-white/50 hover:bg-white/80 rounded-lg p-3 text-gray-600 hover:text-gray-800 transition-colors text-left"
+            >
+              + Add a list
+            </button>
           )}
-
-          {/* Add List Button (placeholder for now) */}
-          <button className="flex-shrink-0 w-72 bg-white/50 hover:bg-white/80 rounded-lg p-3 text-gray-600 hover:text-gray-800 transition-colors text-left">
-            + Add a list
-          </button>
         </div>
       </main>
     </div>
