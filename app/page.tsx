@@ -455,6 +455,25 @@ export default function Home() {
     }
   }
 
+  // Handle list resize
+  async function handleResizeList(listId: string, newWidth: number) {
+    // Update UI immediately (optimistic update)
+    setLists(
+      lists.map((l) => (l.id === listId ? { ...l, width: newWidth } : l))
+    );
+
+    // Save to Supabase
+    const { error } = await supabase
+      .from('lists')
+      .update({ width: newWidth })
+      .eq('id', listId);
+
+    if (error) {
+      console.error('Error updating list width:', error);
+      // Could reload data here to restore the width if update failed
+    }
+  }
+
   // Show loading state
   if (loading) {
     return (
@@ -502,6 +521,7 @@ export default function Home() {
                   onCreateCard={handleCreateCard}
                   onDeleteCard={handleDeleteCard}
                   onDeleteList={handleDeleteList}
+                  onResize={handleResizeList}
                 />
               ))}
 

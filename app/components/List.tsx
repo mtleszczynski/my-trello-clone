@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { List as ListType } from '../types';
@@ -11,13 +11,20 @@ interface ListProps {
   onCreateCard: (listId: string, title: string) => void;
   onDeleteCard: (cardId: string, listId: string) => void;
   onDeleteList: (listId: string) => void;
+  onResize: (listId: string, newWidth: number) => void;
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, onResize, dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
+  
+  // State for resizing
+  const [isResizing, setIsResizing] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const MIN_WIDTH = 200;
+  const MAX_WIDTH = 600;
 
   // Make this list a droppable area
   const { setNodeRef } = useDroppable({
@@ -60,9 +67,53 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, d
     }
   }
 
+  // Handle resize start
+  function handleResizeStart(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+  }
+
+  // Handle resize during drag
+  useEffect(() => {
+    if (!isResizing) return;
+
+    function handleMouseMove(e: MouseEvent) {
+      if (!listRef.current) return;
+      
+      const rect = listRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - rect.left;
+      
+      // Enforce min/max constraints
+      const constrainedWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+      
+      // Update width immediately (optimistic update)
+      onResize(list.id, constrainedWidth);
+    }
+
+    function handleMouseUp() {
+      setIsResizing(false);
+    }
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    // Prevent text selection while resizing
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [isResizing, list.id, onResize]);
+
   return (
     <div
-      className="flex-shrink-0 flex flex-col bg-gray-100 rounded-lg max-h-[calc(100vh-120px)]"
+      ref={listRef}
+      className="flex-shrink-0 flex flex-col bg-gray-100 rounded-lg max-h-[calc(100vh-120px)] relative group"
       style={{ width: `${list.width}px` }}
     >
       {/* List Header */}
@@ -167,6 +218,18 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, d
             + Add a card
           </button>
         )}
+      </div>
+
+      {/* Resize Handle */}
+      <div
+        onMouseDown={handleResizeStart}
+        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:w-3 hover:bg-blue-500 transition-all group-hover:bg-blue-400/50 z-10"
+        style={{ 
+          cursor: isResizing ? 'col-resize' : 'col-resize',
+        }}
+        title="Drag to resize"
+      >
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-8 bg-gray-400 group-hover:bg-blue-500" />
       </div>
     </div>
   );
