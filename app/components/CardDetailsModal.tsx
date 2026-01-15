@@ -44,16 +44,16 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 pt-12 sm:p-4 overflow-hidden"
       onClick={onClose}
     >
       <div
-        className="bg-slate-50 rounded-lg shadow-2xl w-[calc(100%-2rem)] max-w-md max-h-[85vh] flex flex-col border border-slate-200"
+        className="bg-slate-50 rounded-lg shadow-2xl w-full max-w-sm sm:max-w-md flex flex-col border border-slate-200"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-3 py-2 sm:px-4 sm:py-3 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-sm font-medium text-slate-700">Card Details</h2>
           <button
             onClick={onClose}
@@ -68,10 +68,10 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
         </div>
 
         {/* Content */}
-        <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="p-3 sm:p-4 overflow-y-auto custom-scrollbar">
           {/* Title */}
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">
+          <div className="mb-3">
+            <label className="block text-xs font-medium text-slate-500 mb-1">
               Title
             </label>
             <input
@@ -80,13 +80,12 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-sm text-slate-700 placeholder-slate-400"
               placeholder="Enter card title..."
-              autoFocus
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">
+            <label className="block text-xs font-medium text-slate-500 mb-1">
               Description
             </label>
             <textarea
@@ -94,13 +93,13 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 resize-none text-sm text-slate-700 placeholder-slate-400"
               placeholder="Add a more detailed description..."
-              rows={6}
+              rows={4}
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
+        <div className="px-3 py-2 sm:px-4 sm:py-3 border-t border-slate-200 flex items-center justify-end gap-2">
           <button
             onClick={onClose}
             className="px-3 py-1.5 text-slate-500 hover:text-slate-700 transition-colors text-sm"
