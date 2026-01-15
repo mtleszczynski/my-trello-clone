@@ -16,6 +16,7 @@ import { arrayMove, SortableContext, horizontalListSortingStrategy } from '@dnd-
 import { supabase } from './lib/supabase';
 import { List as ListType, Card as CardType } from './types';
 import SortableList from './components/SortableList';
+import CardDetailsModal from './components/CardDetailsModal';
 
 export default function Home() {
   const [lists, setLists] = useState<ListType[]>([]);
@@ -29,6 +30,9 @@ export default function Home() {
   // State for tracking the currently dragged item
   const [activeCard, setActiveCard] = useState<CardType | null>(null);
   const [activeList, setActiveList] = useState<ListType | null>(null);
+  
+  // State for card details modal
+  const [selectedCard, setSelectedCard] = useState<CardType | null>(null);
   
   // Track the original state before drag started (for saving to Supabase)
   const dragStartState = useRef<{ cardId: string; sourceListId: string } | null>(null);
@@ -474,6 +478,44 @@ export default function Home() {
     }
   }
 
+  // Handle opening card details modal
+  function handleCardClick(cardId: string) {
+    // Find the card in the lists
+    for (const list of lists) {
+      const card = (list.cards || []).find((c) => c.id === cardId);
+      if (card) {
+        setSelectedCard(card);
+        break;
+      }
+    }
+  }
+
+  // Handle saving card details
+  async function handleSaveCard(cardId: string, title: string, description: string) {
+    // Update UI immediately (optimistic update)
+    setLists(
+      lists.map((list) => ({
+        ...list,
+        cards: (list.cards || []).map((card) =>
+          card.id === cardId
+            ? { ...card, title, description }
+            : card
+        ),
+      }))
+    );
+
+    // Save to Supabase
+    const { error } = await supabase
+      .from('cards')
+      .update({ title, description })
+      .eq('id', cardId);
+
+    if (error) {
+      console.error('Error updating card:', error);
+      // Could reload data here to restore the card if update failed
+    }
+  }
+
   // Show loading state
   if (loading) {
     return (
@@ -522,6 +564,7 @@ export default function Home() {
                   onDeleteCard={handleDeleteCard}
                   onDeleteList={handleDeleteList}
                   onResize={handleResizeList}
+                  onCardClick={handleCardClick}
                 />
               ))}
 
@@ -586,6 +629,13 @@ export default function Home() {
           </DragOverlay>
         </DndContext>
       </main>
+
+      {/* Card Details Modal */}
+      <CardDetailsModal
+        card={selectedCard}
+        onClose={() => setSelectedCard(null)}
+        onSave={handleSaveCard}
+      />
     </div>
   );
 }

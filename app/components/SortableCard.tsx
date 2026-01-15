@@ -8,9 +8,10 @@ import Card from './Card';
 interface SortableCardProps {
   card: CardType;
   onDelete: () => void;
+  onClick?: () => void;
 }
 
-export default function SortableCard({ card, onDelete }: SortableCardProps) {
+export default function SortableCard({ card, onDelete, onClick }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -28,7 +29,7 @@ export default function SortableCard({ card, onDelete }: SortableCardProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card card={card} onDelete={onDelete} />
+      <Card card={card} onDelete={onDelete} onClick={onClick} />
     </div>
   );
 }

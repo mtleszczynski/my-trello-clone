@@ -11,6 +11,7 @@ interface SortableListProps {
   onDeleteCard: (cardId: string, listId: string) => void;
   onDeleteList: (listId: string) => void;
   onResize: (listId: string, newWidth: number) => void;
+  onCardClick?: (cardId: string) => void;
 }
 
 export default function SortableList({
@@ -19,6 +20,7 @@ export default function SortableList({
   onDeleteCard,
   onDeleteList,
   onResize,
+  onCardClick,
 }: SortableListProps) {
   const {
     attributes,
@@ -49,6 +51,7 @@ export default function SortableList({
         onDeleteCard={onDeleteCard}
         onDeleteList={onDeleteList}
         onResize={onResize}
+        onCardClick={onCardClick}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>
