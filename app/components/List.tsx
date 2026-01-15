@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { List as ListType } from '../types';
-import Card from './Card';
+import SortableCard from './SortableCard';
 
 interface ListProps {
   list: ListType;
@@ -16,8 +18,14 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList }:
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
 
+  // Make this list a droppable area
+  const { setNodeRef } = useDroppable({
+    id: list.id,
+  });
+
   // Sort cards by position
   const sortedCards = [...(list.cards || [])].sort((a, b) => a.position - b.position);
+  const cardIds = sortedCards.map((card) => card.id);
 
   // Handle creating a new card
   function handleCreateCard() {
@@ -68,23 +76,28 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList }:
         </button>
       </div>
 
-      {/* Cards Container */}
-      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2">
-        {sortedCards.length > 0 ? (
-          sortedCards.map((card) => (
-            <Card
-              key={card.id}
-              card={card}
-              onDelete={() => onDeleteCard(card.id, list.id)}
-            />
-          ))
-        ) : (
-          !isAddingCard && (
-            <p className="text-gray-400 text-sm text-center py-4">
-              No cards yet
-            </p>
-          )
-        )}
+      {/* Cards Container - Droppable Area */}
+      <div
+        ref={setNodeRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-2 min-h-[50px]"
+      >
+        <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+          {sortedCards.length > 0 ? (
+            sortedCards.map((card) => (
+              <SortableCard
+                key={card.id}
+                card={card}
+                onDelete={() => onDeleteCard(card.id, list.id)}
+              />
+            ))
+          ) : (
+            !isAddingCard && (
+              <p className="text-gray-400 text-sm text-center py-4">
+                No cards yet
+              </p>
+            )
+          )}
+        </SortableContext>
       </div>
 
       {/* Add Card Section */}
