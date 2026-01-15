@@ -37,6 +37,12 @@ export default function Home() {
   // Track the original state before drag started (for saving to Supabase)
   const dragStartState = useRef<{ cardId: string; sourceListId: string } | null>(null);
 
+  // Drag-to-scroll for the board
+  const boardRef = useRef<HTMLElement>(null);
+  const [isDraggingBoard, setIsDraggingBoard] = useState(false);
+  const dragStartX = useRef(0);
+  const scrollStartX = useRef(0);
+
   // Set up drag sensors (pointer sensor with a small activation distance)
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -547,11 +553,51 @@ export default function Home() {
     }
   }
 
+  // Drag-to-scroll handlers for the board
+  function handleBoardMouseDown(e: React.MouseEvent) {
+    // Only start drag-scroll if clicking on empty board space
+    const target = e.target as HTMLElement;
+    const isOnList = target.closest('.glass');
+    const isOnButton = target.closest('button');
+    const isOnInput = target.closest('input') || target.closest('textarea');
+    
+    if (!isOnList && !isOnButton && !isOnInput && boardRef.current) {
+      setIsDraggingBoard(true);
+      dragStartX.current = e.clientX;
+      scrollStartX.current = boardRef.current.scrollLeft;
+      document.body.style.userSelect = 'none';
+    }
+  }
+
+  function handleBoardMouseMove(e: React.MouseEvent) {
+    if (!isDraggingBoard || !boardRef.current) return;
+    
+    const deltaX = e.clientX - dragStartX.current;
+    boardRef.current.scrollLeft = scrollStartX.current - deltaX;
+  }
+
+  function handleBoardMouseUp() {
+    if (isDraggingBoard) {
+      setIsDraggingBoard(false);
+      document.body.style.userSelect = '';
+    }
+  }
+
+  function handleBoardMouseLeave() {
+    if (isDraggingBoard) {
+      setIsDraggingBoard(false);
+      document.body.style.userSelect = '';
+    }
+  }
+
   // Show loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
-        <p className="text-gray-600">Loading your board...</p>
+      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-slate-400 text-sm">Loading your board...</p>
+        </div>
       </div>
     );
   }
@@ -559,8 +605,8 @@ export default function Home() {
   // Show error state
   if (error) {
     return (
-      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
-        <p className="text-red-600">{error}</p>
+      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
+        <p className="text-red-400">{error}</p>
       </div>
     );
   }
@@ -569,14 +615,23 @@ export default function Home() {
   const listIds = lists.map((list) => `list-${list.id}`);
 
   return (
-    <div className="min-h-screen bg-blue-50">
+    <div className="min-h-screen bg-gradient-dark">
       {/* Header */}
-      <header className="bg-blue-600 text-white p-4">
-        <h1 className="text-xl font-bold">My Trello Clone</h1>
+      <header className="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md border-b border-slate-700/50">
+        <div className="px-4 py-3">
+          <h1 className="text-lg font-semibold text-slate-100">My Trello Clone</h1>
+        </div>
       </header>
 
       {/* Board */}
-      <main className="p-4 overflow-x-auto">
+      <main 
+        ref={boardRef}
+        className={`p-3 pb-8 overflow-x-auto hide-scrollbar relative mobile-scroll min-h-[calc(100vh-56px)] ${isDraggingBoard ? 'cursor-grabbing select-none' : ''}`}
+        onMouseDown={handleBoardMouseDown}
+        onMouseMove={handleBoardMouseMove}
+        onMouseUp={handleBoardMouseUp}
+        onMouseLeave={handleBoardMouseLeave}
+      >
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -585,7 +640,7 @@ export default function Home() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
-            <div className="flex gap-4 items-start">
+            <div className="flex gap-3 items-start pr-8">
               {/* Display all lists */}
               {lists.map((list) => (
                 <SortableList
@@ -603,7 +658,7 @@ export default function Home() {
               {/* Add List Section */}
               {isAddingList ? (
                 // Show input form when adding a list
-                <div className="flex-shrink-0 w-72 bg-gray-100 rounded-lg p-2">
+                <div className="flex-shrink-0 w-64 glass rounded-md p-2">
                   <input
                     type="text"
                     placeholder="Enter list title..."
@@ -611,12 +666,12 @@ export default function Home() {
                     onChange={(e) => setNewListTitle(e.target.value)}
                     onKeyDown={handleKeyDown}
                     autoFocus
-                    className="w-full p-2 rounded border border-gray-300 focus:outline-none focus:border-blue-500"
+                    className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-slate-700 text-sm placeholder-slate-400"
                   />
                   <div className="flex gap-2 mt-2">
                     <button
                       onClick={handleCreateList}
-                      className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors"
+                      className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-500 transition-colors"
                     >
                       Add list
                     </button>
@@ -625,7 +680,7 @@ export default function Home() {
                         setNewListTitle('');
                         setIsAddingList(false);
                       }}
-                      className="text-gray-500 hover:text-gray-700 px-2"
+                      className="text-slate-400 hover:text-slate-600 px-2 transition-colors"
                     >
                       ✕
                     </button>
@@ -635,7 +690,7 @@ export default function Home() {
                 // Show button when not adding
                 <button
                   onClick={() => setIsAddingList(true)}
-                  className="flex-shrink-0 w-72 bg-white/50 hover:bg-white/80 rounded-lg p-3 text-gray-600 hover:text-gray-800 transition-colors text-left"
+                  className="flex-shrink-0 w-64 bg-white/30 hover:bg-white/50 border border-white/40 rounded-md px-3 py-2 text-slate-200 hover:text-white transition-all text-left text-sm"
                 >
                   + Add a list
                 </button>
@@ -646,14 +701,14 @@ export default function Home() {
           {/* Drag Overlay - shows the item being dragged */}
           <DragOverlay>
             {activeCard ? (
-              <div className="bg-white rounded-lg shadow-lg p-3 w-64 opacity-90">
-                <p className="text-gray-900 text-sm">{activeCard.title}</p>
+              <div className="bg-white rounded-md shadow-xl p-2.5 w-56 rotate-2">
+                <p className="text-slate-700 text-sm">{activeCard.title}</p>
               </div>
             ) : null}
             {activeList ? (
-              <div className="bg-gray-100 rounded-lg shadow-lg p-3 opacity-90" style={{ width: `${activeList.width}px` }}>
-                <p className="font-semibold text-gray-900">{activeList.title}</p>
-                <p className="text-gray-500 text-sm mt-2">
+              <div className="glass rounded-md shadow-xl p-2.5 rotate-1" style={{ width: `${activeList.width}px` }}>
+                <p className="font-medium text-slate-700 text-sm">{activeList.title}</p>
+                <p className="text-slate-500 text-xs mt-1">
                   {(activeList.cards || []).length} card{(activeList.cards || []).length !== 1 ? 's' : ''}
                 </p>
               </div>

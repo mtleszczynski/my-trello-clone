@@ -14,8 +14,8 @@ export default function Card({ card, onDelete, onClick, onToggleComplete }: Card
 
   return (
     <div 
-      className={`group bg-white rounded-lg shadow-sm p-3 cursor-pointer hover:bg-gray-50 transition-colors relative ${
-        card.completed ? 'opacity-60' : ''
+      className={`group bg-white rounded-md p-2 cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all relative ${
+        card.completed ? 'opacity-50' : 'hover:translate-y-[-1px] hover:shadow-md'
       }`}
       onClick={onClick}
     >
@@ -26,18 +26,18 @@ export default function Card({ card, onDelete, onClick, onToggleComplete }: Card
             e.stopPropagation(); // Prevent triggering card click
             onToggleComplete?.();
           }}
-          className={`mt-0.5 w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+          className={`mt-0.5 w-3.5 h-3.5 rounded-sm border flex-shrink-0 flex items-center justify-center transition-all ${
             card.completed
-              ? 'bg-green-500 border-green-500 text-white'
-              : 'border-gray-300 hover:border-green-500'
+              ? 'bg-emerald-500 border-emerald-500 text-white'
+              : 'border-slate-300 hover:border-emerald-500 hover:bg-emerald-50'
           }`}
           title={card.completed ? 'Mark incomplete' : 'Mark complete'}
         >
           {card.completed && (
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="10"
-              height="10"
+              width="8"
+              height="8"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -50,22 +50,22 @@ export default function Card({ card, onDelete, onClick, onToggleComplete }: Card
           )}
         </button>
 
-        <p className={`text-sm flex-1 pr-5 ${
-          card.completed ? 'text-gray-500 line-through' : 'text-gray-900'
+        <p className={`text-xs flex-1 pr-4 leading-relaxed ${
+          card.completed ? 'text-slate-400 line-through' : 'text-slate-700'
         }`}>{card.title}</p>
         
         {/* Icon container - positioned on the right */}
-        <div className="absolute right-3 top-3">
+        <div className="absolute right-2 top-2">
           {/* Description icon - visible when not hovering (if card has description) */}
           {hasDescription && (
             <span
-              className="text-gray-400 block group-hover:hidden"
+              className="text-slate-400 block group-hover:hidden"
               title="Has description"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -87,10 +87,13 @@ export default function Card({ card, onDelete, onClick, onToggleComplete }: Card
               e.stopPropagation(); // Prevent triggering card click
               onDelete();
             }}
-            className="text-gray-300 hover:text-red-500 transition-colors hidden group-hover:block"
+            className="text-slate-300 hover:text-red-500 transition-colors hidden group-hover:block"
             title="Delete card"
           >
-            ✕
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
           </button>
         </div>
       </div>
