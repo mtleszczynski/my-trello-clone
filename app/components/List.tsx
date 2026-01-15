@@ -1,15 +1,19 @@
 'use client';
 
 import { List as ListType } from '../types';
+import Card from './Card';
 
 interface ListProps {
   list: ListType;
 }
 
 export default function List({ list }: ListProps) {
+  // Sort cards by position
+  const sortedCards = [...(list.cards || [])].sort((a, b) => a.position - b.position);
+
   return (
     <div
-      className="flex-shrink-0 flex flex-col bg-gray-100 rounded-lg"
+      className="flex-shrink-0 flex flex-col bg-gray-100 rounded-lg max-h-[calc(100vh-120px)]"
       style={{ width: `${list.width}px` }}
     >
       {/* List Header */}
@@ -18,11 +22,16 @@ export default function List({ list }: ListProps) {
       </div>
 
       {/* Cards Container */}
-      <div className="flex-1 overflow-y-auto p-2 min-h-[100px]">
-        {/* Cards will go here later */}
-        <p className="text-gray-400 text-sm text-center py-4">
-          No cards yet
-        </p>
+      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2">
+        {sortedCards.length > 0 ? (
+          sortedCards.map((card) => (
+            <Card key={card.id} card={card} />
+          ))
+        ) : (
+          <p className="text-gray-400 text-sm text-center py-4">
+            No cards yet
+          </p>
+        )}
       </div>
 
       {/* Add Card Button (placeholder for now) */}

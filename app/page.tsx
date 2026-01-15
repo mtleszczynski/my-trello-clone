@@ -22,7 +22,7 @@ export default function Home() {
 
       const { data, error } = await supabase
         .from('lists')
-        .select('*')
+        .select('*, cards(*)')
         .eq('archived', false)
         .order('position', { ascending: true });
 
@@ -69,7 +69,7 @@ export default function Home() {
 
     // Add new list to state (updates UI immediately)
     if (data) {
-      setLists([...lists, data]);
+      setLists([...lists, { ...data, cards: [] }]);
     }
 
     // Reset the form
