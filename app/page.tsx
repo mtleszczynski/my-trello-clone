@@ -666,7 +666,7 @@ export default function Home() {
                     onChange={(e) => setNewListTitle(e.target.value)}
                     onKeyDown={handleKeyDown}
                     autoFocus
-                    className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-slate-700 text-sm placeholder-slate-400"
+                    className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-slate-700 text-base sm:text-sm placeholder-slate-400"
                   />
                   <div className="flex gap-2 mt-2">
                     <button

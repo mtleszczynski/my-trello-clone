@@ -197,7 +197,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
               onKeyDown={handleKeyDown}
               autoFocus
               rows={2}
-              className="w-full px-2 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 resize-none text-sm text-slate-700 placeholder-slate-400"
+              className="w-full px-2 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 resize-none text-base sm:text-sm text-slate-700 placeholder-slate-400"
             />
             <div className="flex gap-2 mt-1.5">
               <button
