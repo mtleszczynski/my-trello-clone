@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
   DragEndEvent,
   DragStartEvent,
+  DragOverEvent,
   DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
-  closestCenter,
+  closestCorners,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { supabase } from './lib/supabase';
 import { List as ListType, Card as CardType } from './types';
 import List from './components/List';
@@ -28,6 +28,9 @@ export default function Home() {
 
   // State for tracking the currently dragged card
   const [activeCard, setActiveCard] = useState<CardType | null>(null);
+  
+  // Track the original state before drag started (for saving to Supabase)
+  const dragStartState = useRef<{ cardId: string; sourceListId: string } | null>(null);
 
   // Set up drag sensors (pointer sensor with a small activation distance)
   const sensors = useSensors(
@@ -73,72 +76,189 @@ export default function Home() {
       const card = (list.cards || []).find((c) => c.id === active.id);
       if (card) {
         setActiveCard(card);
+        dragStartState.current = { cardId: card.id, sourceListId: list.id };
         break;
       }
     }
   }
 
-  // Handle drag end event
-  async function handleDragEnd(event: DragEndEvent) {
-    setActiveCard(null); // Clear the active card
-    
+  // Handle drag over - move card between lists in real-time
+  function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
+    
+    if (!over || !activeCard) return;
 
-    if (!over || active.id === over.id) {
-      return;
-    }
+    const activeId = active.id as string;
+    const overId = over.id as string;
 
-    // Find which list contains the dragged card
-    let sourceList: ListType | undefined;
-
+    // Find current list of the dragged card
+    let activeList: ListType | undefined;
     for (const list of lists) {
-      const cardIndex = (list.cards || []).findIndex((c) => c.id === active.id);
-      if (cardIndex !== -1) {
-        sourceList = list;
+      if ((list.cards || []).find((c) => c.id === activeId)) {
+        activeList = list;
         break;
       }
     }
 
-    if (!sourceList) return;
+    if (!activeList) return;
 
-    // For now, only handle reordering within the same list
-    const overCardIndex = (sourceList.cards || []).findIndex((c) => c.id === over.id);
+    // Determine the target list
+    let overList: ListType | undefined;
+    let overCardId: string | null = null;
+
+    // Check if over.id is a list ID
+    overList = lists.find((l) => l.id === overId);
+
+    if (!overList) {
+      // Check if over.id is a card ID
+      for (const list of lists) {
+        const card = (list.cards || []).find((c) => c.id === overId);
+        if (card) {
+          overList = list;
+          overCardId = card.id;
+          break;
+        }
+      }
+    }
+
+    if (!overList) return;
+
+    // If same list, let SortableContext handle it
+    if (activeList.id === overList.id) {
+      // Reorder within same list
+      if (overCardId && activeId !== overCardId) {
+        setLists((prevLists) => {
+          return prevLists.map((list) => {
+            if (list.id !== activeList!.id) return list;
+
+            const cards = [...(list.cards || [])].sort((a, b) => a.position - b.position);
+            const oldIndex = cards.findIndex((c) => c.id === activeId);
+            const newIndex = cards.findIndex((c) => c.id === overCardId);
+
+            if (oldIndex === -1 || newIndex === -1) return list;
+
+            const reorderedCards = arrayMove(cards, oldIndex, newIndex).map((card, index) => ({
+              ...card,
+              position: index,
+            }));
+
+            return { ...list, cards: reorderedCards };
+          });
+        });
+      }
+      return;
+    }
+
+    // Moving to a different list
+    setLists((prevLists) => {
+      // Remove card from source list
+      const newLists = prevLists.map((list) => {
+        if (list.id === activeList!.id) {
+          const filteredCards = (list.cards || [])
+            .filter((c) => c.id !== activeId)
+            .sort((a, b) => a.position - b.position)
+            .map((card, index) => ({ ...card, position: index }));
+          return { ...list, cards: filteredCards };
+        }
+        return list;
+      });
+
+      // Add card to destination list
+      return newLists.map((list) => {
+        if (list.id === overList!.id) {
+          const destCards = [...(list.cards || [])].sort((a, b) => a.position - b.position);
+          
+          // Find insert position
+          let insertIndex = destCards.length;
+          if (overCardId) {
+            const overIndex = destCards.findIndex((c) => c.id === overCardId);
+            if (overIndex !== -1) {
+              insertIndex = overIndex;
+            }
+          }
+
+          // Create the moved card with updated list_id
+          const movedCard = { ...activeCard!, list_id: list.id };
+          
+          // Insert at position
+          destCards.splice(insertIndex, 0, movedCard);
+          
+          // Update positions
+          const updatedCards = destCards.map((card, index) => ({
+            ...card,
+            position: index,
+          }));
+
+          return { ...list, cards: updatedCards };
+        }
+        return list;
+      });
+    });
+  }
+
+  // Handle drag end event - save to Supabase
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active } = event;
     
-    if (overCardIndex === -1) return; // Card dropped on something that's not a card in this list
+    setActiveCard(null);
+    
+    if (!dragStartState.current) return;
 
-    // Reorder cards in the list
-    const sortedCards = [...(sourceList.cards || [])].sort((a, b) => a.position - b.position);
-    const oldIndex = sortedCards.findIndex((c) => c.id === active.id);
-    const newIndex = sortedCards.findIndex((c) => c.id === over.id);
+    const activeId = active.id as string;
 
-    if (oldIndex === -1 || newIndex === -1) return;
+    // Find the card's current list (after all the drag over updates)
+    let currentList: ListType | undefined;
+    let currentCard: CardType | undefined;
 
-    const reorderedCards = arrayMove(sortedCards, oldIndex, newIndex);
+    for (const list of lists) {
+      const card = (list.cards || []).find((c) => c.id === activeId);
+      if (card) {
+        currentList = list;
+        currentCard = card;
+        break;
+      }
+    }
 
-    // Update positions
-    const updatedCards = reorderedCards.map((card, index) => ({
-      ...card,
-      position: index,
-    }));
+    if (!currentList || !currentCard) {
+      dragStartState.current = null;
+      return;
+    }
 
-    // Update state immediately (optimistic update)
-    setLists(
-      lists.map((l) =>
-        l.id === sourceList!.id ? { ...l, cards: updatedCards } : l
-      )
-    );
+    // Save to Supabase
+    const { sourceListId } = dragStartState.current;
+    
+    // Update the card's list_id and position
+    await supabase
+      .from('cards')
+      .update({ 
+        list_id: currentList.id, 
+        position: currentCard.position 
+      })
+      .eq('id', activeId);
 
-    // Save new positions to Supabase
-    for (const card of updatedCards) {
-      const { error } = await supabase
+    // Update positions in current list
+    const currentListCards = (currentList.cards || []).filter((c) => c.id !== activeId);
+    for (const card of currentListCards) {
+      await supabase
         .from('cards')
         .update({ position: card.position })
         .eq('id', card.id);
+    }
 
-      if (error) {
-        console.error('Error updating card position:', error);
+    // If moved to different list, update source list positions too
+    if (sourceListId !== currentList.id) {
+      const sourceList = lists.find((l) => l.id === sourceListId);
+      if (sourceList) {
+        for (const card of sourceList.cards || []) {
+          await supabase
+            .from('cards')
+            .update({ position: card.position })
+            .eq('id', card.id);
+        }
       }
     }
+
+    dragStartState.current = null;
   }
 
   // Create a new list
@@ -291,9 +411,9 @@ export default function Home() {
       <main className="p-4 overflow-x-auto">
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[restrictToVerticalAxis]}
+          collisionDetection={closestCorners}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
           <div className="flex gap-4 items-start">
