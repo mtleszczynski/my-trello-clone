@@ -8,6 +8,7 @@ import {
   DragOverEvent,
   DragOverlay,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   closestCorners,
@@ -43,11 +44,17 @@ export default function Home() {
   const dragStartX = useRef(0);
   const scrollStartX = useRef(0);
 
-  // Set up drag sensors (pointer sensor with a small activation distance)
+  // Set up drag sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // 8px movement required before drag starts
+        distance: 5, // 5px movement required before drag starts
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 150, // 150ms hold to start drag on touch
+        tolerance: 5,
       },
     })
   );
@@ -722,6 +729,15 @@ export default function Home() {
         card={selectedCard}
         onClose={() => setSelectedCard(null)}
         onSave={handleSaveCard}
+        onDelete={(cardId) => {
+          // Find the list containing the card
+          for (const list of lists) {
+            if ((list.cards || []).find((c) => c.id === cardId)) {
+              handleDeleteCard(cardId, list.id);
+              break;
+            }
+          }
+        }}
       />
     </div>
   );

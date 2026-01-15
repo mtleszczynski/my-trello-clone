@@ -69,22 +69,28 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
     }
   }
 
-  // Handle resize start
+  // Handle resize start (mouse)
   function handleResizeStart(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
   }
 
-  // Handle resize during drag
+  // Handle resize start (touch)
+  function handleResizeTouchStart(e: React.TouchEvent) {
+    e.stopPropagation();
+    setIsResizing(true);
+  }
+
+  // Handle resize during drag (mouse and touch)
   useEffect(() => {
     if (!isResizing) return;
 
-    function handleMouseMove(e: MouseEvent) {
+    function handleMove(clientX: number) {
       if (!listRef.current) return;
       
       const rect = listRef.current.getBoundingClientRect();
-      const newWidth = e.clientX - rect.left;
+      const newWidth = clientX - rect.left;
       
       // Enforce min/max constraints
       const constrainedWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
@@ -93,22 +99,34 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
       onResize(list.id, constrainedWidth);
     }
 
-    function handleMouseUp() {
+    function handleMouseMove(e: MouseEvent) {
+      handleMove(e.clientX);
+    }
+
+    function handleTouchMove(e: TouchEvent) {
+      if (e.touches.length > 0) {
+        handleMove(e.touches[0].clientX);
+      }
+    }
+
+    function handleEnd() {
       setIsResizing(false);
     }
 
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchmove', handleTouchMove);
+    document.addEventListener('touchend', handleEnd);
     
     // Prevent text selection while resizing
     document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleEnd);
       document.body.style.userSelect = '';
-      document.body.style.cursor = '';
     };
   }, [isResizing, list.id, onResize]);
 
@@ -119,7 +137,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
       style={{ width: `${list.width}px` }}
     >
       {/* List Header */}
-      <div className="group/header px-2.5 py-2 flex items-center justify-between gap-1.5 border-b border-slate-200/60">
+      <div className="px-2.5 py-2 flex items-center justify-between gap-1.5 border-b border-slate-200/60">
         {/* Drag Handle */}
         <div
           {...dragHandleProps}
@@ -148,14 +166,18 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
         
         <span className="font-medium text-slate-700 flex-1 text-sm">{list.title}</span>
         
+        {/* Resize Handle */}
         <button
-          onClick={handleDeleteList}
-          className="text-slate-400 hover:text-red-500 transition-colors p-0.5 opacity-0 group-hover/header:opacity-100"
-          title="Delete list"
+          onMouseDown={handleResizeStart}
+          onTouchStart={handleResizeTouchStart}
+          className="text-slate-400 hover:text-blue-500 transition-colors p-0.5"
+          title="Resize list"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
           </svg>
         </button>
       </div>
@@ -221,26 +243,27 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
             </div>
           </div>
         ) : (
-          <button
-            onClick={() => setIsAddingCard(true)}
-            className="w-full text-left text-slate-500 hover:text-slate-700 px-2 py-1.5 rounded hover:bg-slate-200/50 transition-colors text-xs"
-          >
-            + Add a card
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setIsAddingCard(true)}
+              className="text-slate-500 hover:text-slate-700 px-2 py-1.5 rounded hover:bg-slate-200/50 transition-colors text-xs"
+            >
+              + Add a card
+            </button>
+            <button
+              onClick={handleDeleteList}
+              className="text-slate-400 hover:text-red-500 transition-colors p-1.5"
+              title="Delete list"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Resize Handle */}
-      <div
-        onMouseDown={handleResizeStart}
-        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:w-2 hover:bg-blue-500/80 transition-all opacity-0 group-hover:opacity-100 z-10"
-        style={{ 
-          cursor: isResizing ? 'col-resize' : 'col-resize',
-        }}
-        title="Drag to resize"
-      >
-        <div className="absolute right-0.5 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-slate-300 group-hover:bg-blue-500 rounded-full" />
-      </div>
     </div>
   );
 }

@@ -7,9 +7,10 @@ interface CardDetailsModalProps {
   card: CardType | null;
   onClose: () => void;
   onSave: (cardId: string, title: string, description: string) => void;
+  onDelete: (cardId: string) => void;
 }
 
-export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsModalProps) {
+export default function CardDetailsModal({ card, onClose, onSave, onDelete }: CardDetailsModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
@@ -26,6 +27,15 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
     if (!card) return;
     onSave(card.id, title.trim(), description.trim());
     onClose();
+  }
+
+  // Handle deleting
+  function handleDelete() {
+    if (!card) return;
+    if (window.confirm(`Delete "${card.title}"?`)) {
+      onDelete(card.id);
+      onClose();
+    }
   }
 
   // Handle keyboard shortcuts
@@ -99,19 +109,27 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
         </div>
 
         {/* Footer */}
-        <div className="px-3 py-2 sm:px-4 sm:py-3 border-t border-slate-200 flex items-center justify-end gap-2">
+        <div className="px-3 py-2 sm:px-4 sm:py-3 border-t border-slate-200 flex items-center justify-between">
           <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-slate-500 hover:text-slate-700 transition-colors text-sm"
+            onClick={handleDelete}
+            className="px-3 py-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors text-sm"
           >
-            Cancel
+            Delete
           </button>
-          <button
-            onClick={handleSave}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-500 transition-colors"
-          >
-            Save
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-slate-500 hover:text-slate-700 transition-colors text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-500 transition-colors"
+            >
+              Save
+            </button>
+          </div>
         </div>
       </div>
     </div>
