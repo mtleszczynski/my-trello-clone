@@ -77,7 +77,7 @@ export default function Home() {
     setIsAddingList(false);
   }
 
-  // Handle pressing Enter key
+  // Handle pressing Enter key for list creation
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') {
       handleCreateList();
@@ -85,6 +85,45 @@ export default function Home() {
     if (e.key === 'Escape') {
       setNewListTitle('');
       setIsAddingList(false);
+    }
+  }
+
+  // Create a new card in a list
+  async function handleCreateCard(listId: string, title: string) {
+    // Find the list
+    const list = lists.find((l) => l.id === listId);
+    if (!list) return;
+
+    // Calculate position for new card (at the end)
+    const newPosition = (list.cards || []).length;
+
+    // Save to Supabase
+    const { data, error } = await supabase
+      .from('cards')
+      .insert({
+        title: title.trim(),
+        list_id: listId,
+        position: newPosition,
+        completed: false,
+        description: '',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating card:', error);
+      return;
+    }
+
+    // Update state to show new card immediately
+    if (data) {
+      setLists(
+        lists.map((l) =>
+          l.id === listId
+            ? { ...l, cards: [...(l.cards || []), data] }
+            : l
+        )
+      );
     }
   }
 
@@ -118,7 +157,7 @@ export default function Home() {
         <div className="flex gap-4 items-start">
           {/* Display all lists */}
           {lists.map((list) => (
-            <List key={list.id} list={list} />
+            <List key={list.id} list={list} onCreateCard={handleCreateCard} />
           ))}
 
           {/* Add List Section */}
