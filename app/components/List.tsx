@@ -11,9 +11,10 @@ interface ListProps {
   onCreateCard: (listId: string, title: string) => void;
   onDeleteCard: (cardId: string, listId: string) => void;
   onDeleteList: (listId: string) => void;
+  dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onDeleteList }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -65,8 +66,35 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList }:
       style={{ width: `${list.width}px` }}
     >
       {/* List Header */}
-      <div className="group/header p-3 flex items-center justify-between">
-        <span className="font-semibold text-gray-900">{list.title}</span>
+      <div className="group/header p-3 flex items-center justify-between gap-2">
+        {/* Drag Handle */}
+        <div
+          {...dragHandleProps}
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none"
+          title="Drag to reorder"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="9" cy="5" r="1" />
+            <circle cx="9" cy="12" r="1" />
+            <circle cx="9" cy="19" r="1" />
+            <circle cx="15" cy="5" r="1" />
+            <circle cx="15" cy="12" r="1" />
+            <circle cx="15" cy="19" r="1" />
+          </svg>
+        </div>
+        
+        <span className="font-semibold text-gray-900 flex-1">{list.title}</span>
+        
         <button
           onClick={handleDeleteList}
           className="text-gray-400 hover:text-red-500 transition-colors p-1 opacity-0 group-hover/header:opacity-100"

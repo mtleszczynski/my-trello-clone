@@ -12,10 +12,10 @@ import {
   useSensors,
   closestCorners,
 } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
+import { arrayMove, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { supabase } from './lib/supabase';
 import { List as ListType, Card as CardType } from './types';
-import List from './components/List';
+import SortableList from './components/SortableList';
 
 export default function Home() {
   const [lists, setLists] = useState<ListType[]>([]);
@@ -26,8 +26,9 @@ export default function Home() {
   const [isAddingList, setIsAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
 
-  // State for tracking the currently dragged card
+  // State for tracking the currently dragged item
   const [activeCard, setActiveCard] = useState<CardType | null>(null);
+  const [activeList, setActiveList] = useState<ListType | null>(null);
   
   // Track the original state before drag started (for saving to Supabase)
   const dragStartState = useRef<{ cardId: string; sourceListId: string } | null>(null);
@@ -67,15 +68,28 @@ export default function Home() {
     fetchLists();
   }, []);
 
-  // Handle drag start - track which card is being dragged
+  // Handle drag start - track which item is being dragged
   function handleDragStart(event: DragStartEvent) {
     const { active } = event;
+    const activeId = active.id as string;
     
-    // Find the card being dragged
+    // Check if dragging a list
+    if (activeId.startsWith('list-')) {
+      const listId = activeId.replace('list-', '');
+      const list = lists.find((l) => l.id === listId);
+      if (list) {
+        setActiveList(list);
+        setActiveCard(null);
+      }
+      return;
+    }
+    
+    // Otherwise, dragging a card
     for (const list of lists) {
-      const card = (list.cards || []).find((c) => c.id === active.id);
+      const card = (list.cards || []).find((c) => c.id === activeId);
       if (card) {
         setActiveCard(card);
+        setActiveList(null);
         dragStartState.current = { cardId: card.id, sourceListId: list.id };
         break;
       }
@@ -86,28 +100,34 @@ export default function Home() {
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
     
-    if (!over || !activeCard) return;
-
+    if (!over) return;
+    
     const activeId = active.id as string;
     const overId = over.id as string;
+    
+    // If dragging a list, don't do anything in dragOver
+    if (activeId.startsWith('list-')) return;
+    
+    // Card dragging logic
+    if (!activeCard) return;
 
     // Find current list of the dragged card
-    let activeList: ListType | undefined;
+    let activeListContainer: ListType | undefined;
     for (const list of lists) {
       if ((list.cards || []).find((c) => c.id === activeId)) {
-        activeList = list;
+        activeListContainer = list;
         break;
       }
     }
 
-    if (!activeList) return;
+    if (!activeListContainer) return;
 
     // Determine the target list
     let overList: ListType | undefined;
     let overCardId: string | null = null;
 
-    // Check if over.id is a list ID
-    overList = lists.find((l) => l.id === overId);
+    // Check if over.id is a list ID (for dropping on empty lists or list container)
+    overList = lists.find((l) => l.id === overId || `list-${l.id}` === overId);
 
     if (!overList) {
       // Check if over.id is a card ID
@@ -124,12 +144,12 @@ export default function Home() {
     if (!overList) return;
 
     // If same list, let SortableContext handle it
-    if (activeList.id === overList.id) {
+    if (activeListContainer.id === overList.id) {
       // Reorder within same list
       if (overCardId && activeId !== overCardId) {
         setLists((prevLists) => {
           return prevLists.map((list) => {
-            if (list.id !== activeList!.id) return list;
+            if (list.id !== activeListContainer!.id) return list;
 
             const cards = [...(list.cards || [])].sort((a, b) => a.position - b.position);
             const oldIndex = cards.findIndex((c) => c.id === activeId);
@@ -153,7 +173,7 @@ export default function Home() {
     setLists((prevLists) => {
       // Remove card from source list
       const newLists = prevLists.map((list) => {
-        if (list.id === activeList!.id) {
+        if (list.id === activeListContainer!.id) {
           const filteredCards = (list.cards || [])
             .filter((c) => c.id !== activeId)
             .sort((a, b) => a.position - b.position)
@@ -198,13 +218,66 @@ export default function Home() {
 
   // Handle drag end event - save to Supabase
   async function handleDragEnd(event: DragEndEvent) {
-    const { active } = event;
+    const { active, over } = event;
     
+    const activeId = active.id as string;
+    
+    // Handle list reordering
+    if (activeId.startsWith('list-') && over) {
+      const overId = over.id as string;
+      
+      // Get the actual list IDs
+      const activeListId = activeId.replace('list-', '');
+      
+      // overId could be 'list-{id}' or just '{id}' (the droppable area)
+      let overListId = overId.startsWith('list-') ? overId.replace('list-', '') : overId;
+      
+      // Check if overListId is actually a list (not a card)
+      const isOverAList = lists.some((l) => l.id === overListId);
+      
+      if (!isOverAList) {
+        // Maybe we're over a card - find which list contains it
+        for (const list of lists) {
+          const card = (list.cards || []).find((c) => c.id === overId);
+          if (card) {
+            overListId = list.id;
+            break;
+          }
+        }
+      }
+      
+      if (activeListId !== overListId) {
+        const oldIndex = lists.findIndex((l) => l.id === activeListId);
+        const newIndex = lists.findIndex((l) => l.id === overListId);
+        
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const reorderedLists = arrayMove(lists, oldIndex, newIndex).map((list, index) => ({
+            ...list,
+            position: index,
+          }));
+          
+          setLists(reorderedLists);
+          
+          // Save to Supabase
+          for (const list of reorderedLists) {
+            await supabase
+              .from('lists')
+              .update({ position: list.position })
+              .eq('id', list.id);
+          }
+        }
+      }
+      
+      setActiveList(null);
+      setActiveCard(null);
+      return;
+    }
+    
+    // Handle card dragging
     setActiveCard(null);
+    setActiveList(null);
     
     if (!dragStartState.current) return;
-
-    const activeId = active.id as string;
 
     // Find the card's current list (after all the drag over updates)
     let currentList: ListType | undefined;
@@ -400,6 +473,9 @@ export default function Home() {
     );
   }
 
+  // Generate list IDs for SortableContext
+  const listIds = lists.map((list) => `list-${list.id}`);
+
   return (
     <div className="min-h-screen bg-blue-50">
       {/* Header */}
@@ -416,65 +492,75 @@ export default function Home() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-4 items-start">
-            {/* Display all lists */}
-            {lists.map((list) => (
-              <List
-                key={list.id}
-                list={list}
-                onCreateCard={handleCreateCard}
-                onDeleteCard={handleDeleteCard}
-                onDeleteList={handleDeleteList}
-              />
-            ))}
-
-            {/* Add List Section */}
-            {isAddingList ? (
-              // Show input form when adding a list
-              <div className="flex-shrink-0 w-72 bg-gray-100 rounded-lg p-2">
-                <input
-                  type="text"
-                  placeholder="Enter list title..."
-                  value={newListTitle}
-                  onChange={(e) => setNewListTitle(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  autoFocus
-                  className="w-full p-2 rounded border border-gray-300 focus:outline-none focus:border-blue-500"
+          <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
+            <div className="flex gap-4 items-start">
+              {/* Display all lists */}
+              {lists.map((list) => (
+                <SortableList
+                  key={list.id}
+                  list={list}
+                  onCreateCard={handleCreateCard}
+                  onDeleteCard={handleDeleteCard}
+                  onDeleteList={handleDeleteList}
                 />
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={handleCreateList}
-                    className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors"
-                  >
-                    Add list
-                  </button>
-                  <button
-                    onClick={() => {
-                      setNewListTitle('');
-                      setIsAddingList(false);
-                    }}
-                    className="text-gray-500 hover:text-gray-700 px-2"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            ) : (
-              // Show button when not adding
-              <button
-                onClick={() => setIsAddingList(true)}
-                className="flex-shrink-0 w-72 bg-white/50 hover:bg-white/80 rounded-lg p-3 text-gray-600 hover:text-gray-800 transition-colors text-left"
-              >
-                + Add a list
-              </button>
-            )}
-          </div>
+              ))}
 
-          {/* Drag Overlay - shows the card being dragged */}
+              {/* Add List Section */}
+              {isAddingList ? (
+                // Show input form when adding a list
+                <div className="flex-shrink-0 w-72 bg-gray-100 rounded-lg p-2">
+                  <input
+                    type="text"
+                    placeholder="Enter list title..."
+                    value={newListTitle}
+                    onChange={(e) => setNewListTitle(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    autoFocus
+                    className="w-full p-2 rounded border border-gray-300 focus:outline-none focus:border-blue-500"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={handleCreateList}
+                      className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors"
+                    >
+                      Add list
+                    </button>
+                    <button
+                      onClick={() => {
+                        setNewListTitle('');
+                        setIsAddingList(false);
+                      }}
+                      className="text-gray-500 hover:text-gray-700 px-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Show button when not adding
+                <button
+                  onClick={() => setIsAddingList(true)}
+                  className="flex-shrink-0 w-72 bg-white/50 hover:bg-white/80 rounded-lg p-3 text-gray-600 hover:text-gray-800 transition-colors text-left"
+                >
+                  + Add a list
+                </button>
+              )}
+            </div>
+          </SortableContext>
+
+          {/* Drag Overlay - shows the item being dragged */}
           <DragOverlay>
             {activeCard ? (
               <div className="bg-white rounded-lg shadow-lg p-3 w-64 opacity-90">
                 <p className="text-gray-900 text-sm">{activeCard.title}</p>
+              </div>
+            ) : null}
+            {activeList ? (
+              <div className="bg-gray-100 rounded-lg shadow-lg p-3 opacity-90" style={{ width: `${activeList.width}px` }}>
+                <p className="font-semibold text-gray-900">{activeList.title}</p>
+                <p className="text-gray-500 text-sm mt-2">
+                  {(activeList.cards || []).length} card{(activeList.cards || []).length !== 1 ? 's' : ''}
+                </p>
               </div>
             ) : null}
           </DragOverlay>
