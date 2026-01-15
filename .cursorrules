@@ -58,6 +58,11 @@ A personal Trello clone with resizable lists. Simpler than Trello but with the k
 - Use @dnd-kit/sortable for sortable lists
 - Update positions in database after drag completes
 - Use string IDs for draggable items
+- Use DragOverlay for smooth drag visuals (prevents flickering/layout shifts)
+- Use closestCorners collision detection for cross-list card movement
+- Prefix list IDs with 'list-' to distinguish from card IDs (e.g., `list-${list.id}`)
+- Use onDragOver for real-time preview of card movement between lists
+- Handle both sortable ID formats: 'list-{id}' and raw '{id}' when dropping
 
 ## Styling Guidelines
 - Use Tailwind CSS utility classes
@@ -65,8 +70,11 @@ A personal Trello clone with resizable lists. Simpler than Trello but with the k
 - Use consistent spacing (p-4, gap-2, etc.)
 - Use gray-50, gray-100 for backgrounds
 - Use gray-900 for text
-- Use blue-500 for interactive elements
+- Use blue-500/blue-600 for interactive elements
 - Make buttons and interactive elements obvious
+- Keep UI elements consistent (e.g., delete buttons should look/behave the same everywhere)
+- Use hover-to-show for secondary actions (delete buttons appear on hover)
+- Use Tailwind group/group-hover for parent-triggered hover effects
 
 ## Database Tables
 - lists: id, title, position, width, archived, created_at
@@ -78,6 +86,9 @@ A personal Trello clone with resizable lists. Simpler than Trello but with the k
 - Break big tasks into small chunks
 - Don't assume technical knowledge
 - Be explicit about where to click, what to type, etc.
+- When referencing external services (Supabase, GitHub, Vercel), give exact navigation paths
+- Run terminal commands directly instead of asking user to copy-paste (use run_terminal_cmd tool)
+- When something doesn't work, fix it immediately rather than asking for more details
 
 ## Git Workflow
 - Commit after each feature is working

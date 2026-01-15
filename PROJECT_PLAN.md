@@ -7,9 +7,18 @@ A personal Trello clone with resizable lists for organizing tasks at work and ho
 - [x] Project setup (Next.js, TypeScript, Tailwind)
 - [x] Supabase client configured
 - [x] @dnd-kit installed for drag and drop
-- [x] GitHub repository set up
+- [x] GitHub repository set up (with SSH keys for personal account)
 - [x] Vercel deployment working
 - [x] Database schema file created
+- [x] Phase 1: Database tables created in Supabase
+- [x] Phase 2: Display lists from database
+- [x] Phase 3: Create new lists
+- [x] Phase 4: Display cards in lists
+- [x] Phase 5: Create new cards
+- [x] Phase 6: Delete cards and lists
+- [x] Phase 7: Drag and drop cards within lists
+- [x] Phase 8: Drag and drop cards between lists (with real-time preview)
+- [x] Phase 9: Drag and drop to reorder lists
 
 ## What's Left To Do
 
@@ -198,6 +207,23 @@ A personal Trello clone with resizable lists for organizing tasks at work and ho
 - [ ] **Step 15.6:** Final commit and push
 
 ---
+
+## Current File Structure
+```
+app/
+  components/
+    Card.tsx           - Single card display
+    List.tsx           - Single list with cards, drag handle, delete button
+    SortableCard.tsx   - Draggable card wrapper
+    SortableList.tsx   - Draggable list wrapper
+  lib/
+    supabase.ts        - Supabase client
+  types/
+    index.ts           - TypeScript interfaces (Card, List)
+  page.tsx             - Main board with DndContext, all handlers
+  layout.tsx           - App layout
+  globals.css          - Global styles
+```
 
 ## How We'll Work Together
 
