@@ -48,7 +48,7 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
       onClick={onClose}
     >
       <div
-        className="bg-slate-50 rounded-lg shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col border border-slate-200"
+        className="bg-slate-50 rounded-lg shadow-2xl w-[calc(100%-2rem)] max-w-md max-h-[85vh] flex flex-col border border-slate-200"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
