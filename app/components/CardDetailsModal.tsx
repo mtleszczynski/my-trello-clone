@@ -78,7 +78,7 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-sm text-slate-700 placeholder-slate-400"
+              className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-base sm:text-sm text-slate-700 placeholder-slate-400"
               placeholder="Enter card title..."
             />
           </div>
@@ -91,7 +91,7 @@ export default function CardDetailsModal({ card, onClose, onSave }: CardDetailsM
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 resize-none text-sm text-slate-700 placeholder-slate-400"
+              className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 resize-none text-base sm:text-sm text-slate-700 placeholder-slate-400"
               placeholder="Add a more detailed description..."
               rows={4}
             />
