@@ -1,0 +1,91 @@
+# My Trello Clone - Project Rules
+
+## About the User
+- Not super technical - needs simple, step-by-step instructions
+- Prefers bigger tasks split into smaller chunks
+- Using this app to organize personal tasks at work and home
+- Building this because Trello doesn't allow resizing list widths
+
+## Project Overview
+A personal Trello clone with resizable lists. Simpler than Trello but with the key features needed for personal task management.
+
+## Core Features (in order of implementation)
+1. Display lists from database
+2. Create new lists with names
+3. Display cards/items in lists
+4. Create new cards
+5. Delete cards
+6. Delete lists
+7. Reorder cards within a list (drag and drop)
+8. Move cards between lists (drag and drop)
+9. Reorder lists (drag and drop)
+10. Resize list widths (drag to resize)
+11. Card details modal (click to open, add text details)
+12. Mark cards as completed (checkbox/strikethrough)
+13. Archive lists (move to archive board)
+14. Search/filter lists and cards
+
+## Tech Stack
+- Next.js 16 with App Router
+- TypeScript
+- Tailwind CSS v4
+- Supabase for database
+- @dnd-kit/core and @dnd-kit/sortable for drag and drop
+- React 19
+
+## Code Style
+- Use functional components with hooks
+- Use TypeScript interfaces for props and data types
+- Keep components small and focused (one job per component)
+- Use async/await for Supabase operations
+- Always handle errors from Supabase queries
+- Use optimistic UI updates (update UI immediately, then sync with database)
+
+## File Organization
+- Pages in `app/` directory (Next.js App Router)
+- Components in `app/components/`
+- Utilities and Supabase client in `app/lib/`
+- Types/interfaces in `app/types/` (create when needed)
+
+## Supabase Patterns
+- Always check for errors: `if (error) { console.error(...); return; }`
+- Update local state first for responsive UI
+- Use `.select()` to get data back after insert/update
+- Use proper TypeScript types for database responses
+
+## Drag and Drop (@dnd-kit)
+- Use @dnd-kit/core for base functionality
+- Use @dnd-kit/sortable for sortable lists
+- Update positions in database after drag completes
+- Use string IDs for draggable items
+
+## Styling Guidelines
+- Use Tailwind CSS utility classes
+- Keep design clean and minimal
+- Use consistent spacing (p-4, gap-2, etc.)
+- Use gray-50, gray-100 for backgrounds
+- Use gray-900 for text
+- Use blue-500 for interactive elements
+- Make buttons and interactive elements obvious
+
+## Database Tables
+- lists: id, title, position, width, archived, created_at
+- cards: id, title, description, position, list_id, completed, created_at
+
+## Communication Style
+- Give simple, step-by-step instructions
+- Explain what each step does
+- Break big tasks into small chunks
+- Don't assume technical knowledge
+- Be explicit about where to click, what to type, etc.
+
+## Git Workflow
+- Commit after each feature is working
+- Use clear commit messages: "Add list creation", "Add card drag and drop"
+- Push to GitHub after significant progress
+- Vercel auto-deploys from GitHub
+
+## Testing Approach
+- Test each feature manually after building
+- Check both local (localhost:3000) and deployed (Vercel) versions
+- Verify data persists in Supabase

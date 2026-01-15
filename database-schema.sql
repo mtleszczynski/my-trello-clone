@@ -11,6 +11,7 @@ CREATE TABLE lists (
   title TEXT NOT NULL,
   position INTEGER NOT NULL DEFAULT 0,
   width INTEGER NOT NULL DEFAULT 300,
+  archived BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -18,13 +19,16 @@ CREATE TABLE lists (
 CREATE TABLE cards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
+  description TEXT DEFAULT '',
   position INTEGER NOT NULL DEFAULT 0,
   list_id UUID NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+  completed BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for better query performance
 CREATE INDEX idx_lists_position ON lists(position);
+CREATE INDEX idx_lists_archived ON lists(archived);
 CREATE INDEX idx_cards_list_id ON cards(list_id);
 CREATE INDEX idx_cards_position ON cards(position);
 
