@@ -205,7 +205,25 @@ A personal Trello clone with resizable lists for organizing tasks at work and ho
 2. **One step at a time** - I'll guide you through each step with simple instructions
 3. **Test as we go** - We'll test each feature before moving on
 4. **Commit often** - We'll save progress to GitHub regularly
-5. **Ask questions** - If anything is unclear, just ask
+5. **I'll remind you to push** - I'll tell you when it's a good time to push to GitHub
+6. **Ask questions** - If anything is unclear, just ask
+
+## When to Push to GitHub
+
+I'll remind you, but here's when it's a good time to push:
+
+- **After adding important files** - Like config files or documentation
+- **After completing a feature** - When something new works
+- **Before making risky changes** - So you can go back if something breaks
+- **At the end of a work session** - Before you close your laptop
+- **After fixing a bug** - Save the fix so you don't lose it
+
+**Quick commands:**
+```bash
+git add .
+git commit -m "Your message here"
+git push
+```
 
 ## Ready to Start?
 

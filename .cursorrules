@@ -84,6 +84,9 @@ A personal Trello clone with resizable lists. Simpler than Trello but with the k
 - Use clear commit messages: "Add list creation", "Add card drag and drop"
 - Push to GitHub after significant progress
 - Vercel auto-deploys from GitHub
+- **Always tell the user when it's a good time to push** with a reminder like:
+  - "Good time to push: [reason]"
+  - Suggest the exact commands to run
 
 ## Testing Approach
 - Test each feature manually after building
