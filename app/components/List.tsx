@@ -13,10 +13,11 @@ interface ListProps {
   onDeleteList: (listId: string) => void;
   onResize: (listId: string, newWidth: number) => void;
   onCardClick?: (cardId: string) => void;
+  onToggleComplete?: (cardId: string) => void;
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, onResize, onCardClick, dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, onResize, onCardClick, onToggleComplete, dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -169,6 +170,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
                 card={card}
                 onDelete={() => onDeleteCard(card.id, list.id)}
                 onClick={() => onCardClick?.(card.id)}
+                onToggleComplete={() => onToggleComplete?.(card.id)}
               />
             ))
           ) : (

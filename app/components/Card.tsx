@@ -6,18 +6,53 @@ interface CardProps {
   card: CardType;
   onDelete: () => void;
   onClick?: () => void;
+  onToggleComplete?: () => void;
 }
 
-export default function Card({ card, onDelete, onClick }: CardProps) {
+export default function Card({ card, onDelete, onClick, onToggleComplete }: CardProps) {
   const hasDescription = card.description && card.description.trim().length > 0;
 
   return (
     <div 
-      className="group bg-white rounded-lg shadow-sm p-3 cursor-pointer hover:bg-gray-50 transition-colors relative"
+      className={`group bg-white rounded-lg shadow-sm p-3 cursor-pointer hover:bg-gray-50 transition-colors relative ${
+        card.completed ? 'opacity-60' : ''
+      }`}
       onClick={onClick}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-gray-900 text-sm flex-1 pr-5">{card.title}</p>
+      <div className="flex items-start gap-2">
+        {/* Checkbox */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent triggering card click
+            onToggleComplete?.();
+          }}
+          className={`mt-0.5 w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+            card.completed
+              ? 'bg-green-500 border-green-500 text-white'
+              : 'border-gray-300 hover:border-green-500'
+          }`}
+          title={card.completed ? 'Mark incomplete' : 'Mark complete'}
+        >
+          {card.completed && (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+        </button>
+
+        <p className={`text-sm flex-1 pr-5 ${
+          card.completed ? 'text-gray-500 line-through' : 'text-gray-900'
+        }`}>{card.title}</p>
         
         {/* Icon container - positioned on the right */}
         <div className="absolute right-3 top-3">

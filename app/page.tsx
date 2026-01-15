@@ -516,6 +516,37 @@ export default function Home() {
     }
   }
 
+  // Handle toggling card completion
+  async function handleToggleComplete(cardId: string) {
+    // Find the card and toggle its completed state
+    let newCompletedState = false;
+    
+    // Update UI immediately (optimistic update)
+    setLists(
+      lists.map((list) => ({
+        ...list,
+        cards: (list.cards || []).map((card) => {
+          if (card.id === cardId) {
+            newCompletedState = !card.completed;
+            return { ...card, completed: newCompletedState };
+          }
+          return card;
+        }),
+      }))
+    );
+
+    // Save to Supabase
+    const { error } = await supabase
+      .from('cards')
+      .update({ completed: newCompletedState })
+      .eq('id', cardId);
+
+    if (error) {
+      console.error('Error updating card completion:', error);
+      // Could reload data here to restore the card if update failed
+    }
+  }
+
   // Show loading state
   if (loading) {
     return (
@@ -565,6 +596,7 @@ export default function Home() {
                   onDeleteList={handleDeleteList}
                   onResize={handleResizeList}
                   onCardClick={handleCardClick}
+                  onToggleComplete={handleToggleComplete}
                 />
               ))}
 
