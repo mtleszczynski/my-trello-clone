@@ -7,9 +7,11 @@ import Card from './Card';
 interface ListProps {
   list: ListType;
   onCreateCard: (listId: string, title: string) => void;
+  onDeleteCard: (cardId: string, listId: string) => void;
+  onDeleteList: (listId: string) => void;
 }
 
-export default function List({ list, onCreateCard }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onDeleteList }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -37,21 +39,44 @@ export default function List({ list, onCreateCard }: ListProps) {
     }
   }
 
+  // Handle deleting the list (with confirmation)
+  function handleDeleteList() {
+    const cardCount = (list.cards || []).length;
+    const message = cardCount > 0
+      ? `Delete "${list.title}" and its ${cardCount} card${cardCount > 1 ? 's' : ''}?`
+      : `Delete "${list.title}"?`;
+    
+    if (window.confirm(message)) {
+      onDeleteList(list.id);
+    }
+  }
+
   return (
     <div
       className="flex-shrink-0 flex flex-col bg-gray-100 rounded-lg max-h-[calc(100vh-120px)]"
       style={{ width: `${list.width}px` }}
     >
       {/* List Header */}
-      <div className="p-3 font-semibold text-gray-900">
-        {list.title}
+      <div className="group/header p-3 flex items-center justify-between">
+        <span className="font-semibold text-gray-900">{list.title}</span>
+        <button
+          onClick={handleDeleteList}
+          className="text-gray-400 hover:text-red-500 transition-colors p-1 opacity-0 group-hover/header:opacity-100"
+          title="Delete list"
+        >
+          ✕
+        </button>
       </div>
 
       {/* Cards Container */}
       <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2">
         {sortedCards.length > 0 ? (
           sortedCards.map((card) => (
-            <Card key={card.id} card={card} />
+            <Card
+              key={card.id}
+              card={card}
+              onDelete={() => onDeleteCard(card.id, list.id)}
+            />
           ))
         ) : (
           !isAddingCard && (

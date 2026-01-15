@@ -127,6 +127,40 @@ export default function Home() {
     }
   }
 
+  // Delete a card
+  async function handleDeleteCard(cardId: string, listId: string) {
+    // Update UI immediately (optimistic update)
+    setLists(
+      lists.map((l) =>
+        l.id === listId
+          ? { ...l, cards: (l.cards || []).filter((c) => c.id !== cardId) }
+          : l
+      )
+    );
+
+    // Delete from Supabase
+    const { error } = await supabase.from('cards').delete().eq('id', cardId);
+
+    if (error) {
+      console.error('Error deleting card:', error);
+      // Could reload data here to restore the card if delete failed
+    }
+  }
+
+  // Delete a list (and all its cards)
+  async function handleDeleteList(listId: string) {
+    // Update UI immediately (optimistic update)
+    setLists(lists.filter((l) => l.id !== listId));
+
+    // Delete from Supabase (cards are deleted automatically due to CASCADE)
+    const { error } = await supabase.from('lists').delete().eq('id', listId);
+
+    if (error) {
+      console.error('Error deleting list:', error);
+      // Could reload data here to restore the list if delete failed
+    }
+  }
+
   // Show loading state
   if (loading) {
     return (
@@ -157,7 +191,13 @@ export default function Home() {
         <div className="flex gap-4 items-start">
           {/* Display all lists */}
           {lists.map((list) => (
-            <List key={list.id} list={list} onCreateCard={handleCreateCard} />
+            <List
+              key={list.id}
+              list={list}
+              onCreateCard={handleCreateCard}
+              onDeleteCard={handleDeleteCard}
+              onDeleteList={handleDeleteList}
+            />
           ))}
 
           {/* Add List Section */}
