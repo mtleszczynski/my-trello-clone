@@ -40,6 +40,9 @@ export default function Home() {
   
   // Track the original state before drag started (for saving to Supabase)
   const dragStartState = useRef<{ cardId: string; sourceListId: string } | null>(null);
+  
+  // Prevent duplicate sample data creation
+  const isCreatingSampleData = useRef(false);
 
   // Drag-to-scroll for the board
   const boardRef = useRef<HTMLElement>(null);
@@ -168,9 +171,11 @@ export default function Home() {
         return;
       }
 
-      // If user has no lists, create sample data
-      if (data && data.length === 0) {
+      // If user has no lists, create sample data (only once)
+      if (data && data.length === 0 && !isCreatingSampleData.current) {
+        isCreatingSampleData.current = true;
         const sampleData = await createSampleData(user.id);
+        isCreatingSampleData.current = false;
         if (sampleData) {
           setLists(sampleData);
         }
