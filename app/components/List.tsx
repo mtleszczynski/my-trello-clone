@@ -12,15 +12,21 @@ interface ListProps {
   onDeleteCard: (cardId: string, listId: string) => void;
   onDeleteList: (listId: string) => void;
   onResize: (listId: string, newWidth: number) => void;
+  onRenameList: (listId: string, newTitle: string) => void;
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, onResize, onCardClick, onToggleComplete, dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, onResize, onRenameList, onCardClick, onToggleComplete, dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
+  
+  // State for editing list title
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(list.title);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   
   // State for resizing
   const [isResizing, setIsResizing] = useState(false);
@@ -66,6 +72,35 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
     
     if (window.confirm(message)) {
       onDeleteList(list.id);
+    }
+  }
+
+  // Handle starting title edit
+  function handleStartEditingTitle() {
+    setEditedTitle(list.title);
+    setIsEditingTitle(true);
+    // Focus the input after React renders it
+    setTimeout(() => titleInputRef.current?.select(), 0);
+  }
+
+  // Handle saving the edited title
+  function handleSaveTitle() {
+    const trimmedTitle = editedTitle.trim();
+    if (trimmedTitle && trimmedTitle !== list.title) {
+      onRenameList(list.id, trimmedTitle);
+    }
+    setIsEditingTitle(false);
+  }
+
+  // Handle title input keyboard shortcuts
+  function handleTitleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveTitle();
+    }
+    if (e.key === 'Escape') {
+      setEditedTitle(list.title);
+      setIsEditingTitle(false);
     }
   }
 
@@ -164,7 +199,25 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
           </svg>
         </div>
         
-        <span className="font-medium text-slate-700 flex-1 text-sm">{list.title}</span>
+        {isEditingTitle ? (
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={editedTitle}
+            onChange={(e) => setEditedTitle(e.target.value)}
+            onBlur={handleSaveTitle}
+            onKeyDown={handleTitleKeyDown}
+            className="font-medium text-slate-700 flex-1 text-sm bg-white border border-blue-500 rounded px-1.5 py-0.5 focus:outline-none"
+          />
+        ) : (
+          <span
+            onClick={handleStartEditingTitle}
+            className="font-medium text-slate-700 flex-1 text-sm cursor-pointer hover:bg-slate-200/50 rounded px-1.5 py-0.5 -mx-1.5 -my-0.5"
+            title="Click to rename"
+          >
+            {list.title}
+          </span>
+        )}
         
         {/* Resize Handle */}
         <button
