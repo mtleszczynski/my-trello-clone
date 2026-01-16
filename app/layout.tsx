@@ -16,6 +16,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "My Trello Clone",
   description: "A kanban board application built with Next.js and Supabase",
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+    },
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
