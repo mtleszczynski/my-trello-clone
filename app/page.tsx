@@ -32,6 +32,7 @@ export default function Home() {
 
   // State for tracking the currently dragged item
   const [activeCard, setActiveCard] = useState<CardType | null>(null);
+  const [activeCardListWidth, setActiveCardListWidth] = useState<number>(300);
   const [activeList, setActiveList] = useState<ListType | null>(null);
   
   // State for card details modal
@@ -117,6 +118,7 @@ export default function Home() {
       const card = (list.cards || []).find((c) => c.id === activeId);
       if (card) {
         setActiveCard(card);
+        setActiveCardListWidth(list.width);
         setActiveList(null);
         dragStartState.current = { cardId: card.id, sourceListId: list.id };
         break;
@@ -806,8 +808,27 @@ export default function Home() {
           {/* Drag Overlay - shows the item being dragged */}
           <DragOverlay>
             {activeCard ? (
-              <div className="bg-white rounded-md shadow-xl p-2.5 w-56 rotate-2">
-                <p className="text-slate-700 text-sm">{activeCard.title}</p>
+              <div 
+                className="bg-white rounded-md shadow-xl p-2 rotate-2"
+                style={{ width: `${activeCardListWidth - 12}px` }}
+              >
+                <div className="flex items-start gap-2">
+                  {/* Checkbox visual */}
+                  <div className={`mt-0.5 w-3.5 h-3.5 rounded-sm border flex-shrink-0 flex items-center justify-center ${
+                    activeCard.completed
+                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                      : 'border-slate-300'
+                  }`}>
+                    {activeCard.completed && (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <p className={`text-xs flex-1 leading-relaxed ${
+                    activeCard.completed ? 'text-slate-400 line-through' : 'text-slate-700'
+                  }`}>{activeCard.title}</p>
+                </div>
               </div>
             ) : null}
             {activeList ? (
