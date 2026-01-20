@@ -87,7 +87,9 @@ export default function Card({ card, onDelete, onClick, onToggleComplete, search
           <button
             onClick={(e) => {
               e.stopPropagation(); // Prevent triggering card click
-              onDelete();
+              if (window.confirm(`Delete "${card.title}"?`)) {
+                onDelete();
+              }
             }}
             className="text-slate-300 hover:text-red-500 transition-colors hidden group-hover:block"
             title="Delete card"
