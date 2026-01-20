@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card as CardType } from '../types';
 
 interface CardDetailsModalProps {
@@ -13,6 +13,15 @@ interface CardDetailsModalProps {
 export default function CardDetailsModal({ card, onClose, onSave, onDelete }: CardDetailsModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  
+  // Resize state
+  const [size, setSize] = useState({ width: 448, height: 320 }); // Default size (max-w-md = 28rem = 448px)
+  const [isResizing, setIsResizing] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const MIN_WIDTH = 320;
+  const MAX_WIDTH = 800;
+  const MIN_HEIGHT = 250;
+  const MAX_HEIGHT = 600;
 
   // Update form when card changes
   useEffect(() => {
@@ -49,6 +58,54 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
     }
   }
 
+  // Handle resize
+  function handleResizeStart(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+  }
+
+  // Handle resize during drag
+  useEffect(() => {
+    if (!isResizing) return;
+
+    function handleMouseMove(e: MouseEvent) {
+      if (!modalRef.current) return;
+      
+      const rect = modalRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - rect.left;
+      const newHeight = e.clientY - rect.top;
+      
+      setSize({
+        width: Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth)),
+        height: Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, newHeight)),
+      });
+    }
+
+    function handleMouseUp() {
+      setIsResizing(false);
+    }
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'nwse-resize';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [isResizing]);
+
+  // Reset size when modal opens with a new card
+  useEffect(() => {
+    if (card) {
+      setSize({ width: 448, height: 320 });
+    }
+  }, [card?.id]);
+
   // Don't render if no card
   if (!card) return null;
 
@@ -58,7 +115,9 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
       onClick={onClose}
     >
       <div
-        className="bg-slate-50 rounded-lg shadow-2xl w-full max-w-sm sm:max-w-md flex flex-col border border-slate-200"
+        ref={modalRef}
+        className="bg-slate-50 rounded-lg shadow-2xl flex flex-col border border-slate-200 relative"
+        style={{ width: `${size.width}px`, height: `${size.height}px` }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
@@ -78,9 +137,9 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
         </div>
 
         {/* Content */}
-        <div className="p-3 sm:p-4 overflow-y-auto custom-scrollbar">
+        <div className="p-3 sm:p-4 overflow-y-auto custom-scrollbar flex-1 flex flex-col min-h-0">
           {/* Title */}
-          <div className="mb-3">
+          <div className="mb-3 flex-shrink-0">
             <label className="block text-xs font-medium text-slate-500 mb-1">
               Title
             </label>
@@ -94,22 +153,21 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
           </div>
 
           {/* Description */}
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">
+          <div className="flex-1 flex flex-col min-h-0">
+            <label className="block text-xs font-medium text-slate-500 mb-1 flex-shrink-0">
               Description
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 resize-none text-base sm:text-sm text-slate-700 placeholder-slate-400"
+              className="w-full flex-1 px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 resize-none text-base sm:text-sm text-slate-700 placeholder-slate-400 min-h-[80px]"
               placeholder="Add a more detailed description..."
-              rows={4}
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-3 py-2 sm:px-4 sm:py-3 border-t border-slate-200 flex items-center justify-between">
+        <div className="px-3 py-2 sm:px-4 sm:py-3 border-t border-slate-200 flex items-center justify-between flex-shrink-0">
           <button
             onClick={handleDelete}
             className="px-3 py-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors text-sm"
@@ -130,6 +188,23 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
               Save
             </button>
           </div>
+        </div>
+
+        {/* Resize Handle */}
+        <div
+          onMouseDown={handleResizeStart}
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize group"
+          title="Drag to resize"
+        >
+          <svg
+            className="absolute bottom-1 right-1 text-slate-300 group-hover:text-slate-500 transition-colors"
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="currentColor"
+          >
+            <polygon points="10,0 10,10 0,10" />
+          </svg>
         </div>
       </div>
     </div>
