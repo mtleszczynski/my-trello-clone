@@ -12,6 +12,7 @@ interface SortableListProps {
   onArchiveList: (listId: string) => void;
   onResize: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
+  onToggleShared?: (listId: string) => void;
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
   isArchiveView?: boolean;
@@ -25,6 +26,7 @@ export default function SortableList({
   onArchiveList,
   onResize,
   onRenameList,
+  onToggleShared,
   onCardClick,
   onToggleComplete,
   isArchiveView,
@@ -60,6 +62,7 @@ export default function SortableList({
         onArchiveList={onArchiveList}
         onResize={onResize}
         onRenameList={onRenameList}
+        onToggleShared={onToggleShared}
         onCardClick={onCardClick}
         onToggleComplete={onToggleComplete}
         isArchiveView={isArchiveView}

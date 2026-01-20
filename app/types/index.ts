@@ -20,6 +20,7 @@ export interface List {
   width: number;
   archived: boolean;
   board: BoardType;
+  shared: boolean;
   user_id: string;
   created_at: string;
   cards?: Card[];

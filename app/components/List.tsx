@@ -14,6 +14,7 @@ interface ListProps {
   onArchiveList: (listId: string) => void;
   onResize: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
+  onToggleShared?: (listId: string) => void;
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
   isArchiveView?: boolean;
@@ -21,7 +22,7 @@ interface ListProps {
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onResize, onRenameList, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onResize, onRenameList, onToggleShared, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -237,6 +238,24 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
               </span>
             )}
           </div>
+        )}
+        
+        {/* Share Toggle - only show when not in archive view */}
+        {!isArchiveView && onToggleShared && (
+          <button
+            onClick={() => onToggleShared(list.id)}
+            className={`transition-colors p-0.5 ${
+              list.shared
+                ? 'text-blue-500 hover:text-blue-600'
+                : 'text-slate-400 hover:text-blue-500'
+            }`}
+            title={list.shared ? 'Shared across boards (click to unshare)' : 'Share across boards'}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+          </button>
         )}
         
         {/* Resize Handle */}

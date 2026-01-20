@@ -90,7 +90,7 @@ export default function Home() {
     // Create lists
     const { data: createdLists, error: listsError } = await supabase
       .from('lists')
-      .insert(sampleLists.map(list => ({ ...list, user_id: userId, archived: false, board: 'work' })))
+      .insert(sampleLists.map(list => ({ ...list, user_id: userId, archived: false, board: 'work', shared: false })))
       .select();
 
     if (listsError || !createdLists) {
@@ -183,8 +183,9 @@ export default function Home() {
       
       // Only filter by board and archived status when NOT searching
       if (!searchQuery.trim()) {
+        // Include lists that match the current board OR are shared
         query = query
-          .eq('board', getCurrentBoard())
+          .or(`board.eq.${getCurrentBoard()},shared.eq.true`)
           .eq('archived', isArchiveView);
       }
       
@@ -504,6 +505,7 @@ export default function Home() {
         width: 300,
         archived: false,
         board: getCurrentBoard(),
+        shared: false,
         user_id: user.id,
       })
       .select()
@@ -626,6 +628,31 @@ export default function Home() {
     if (error) {
       console.error('Error unarchiving list:', error);
       // Could reload data here to restore the list if unarchive failed
+    }
+  }
+
+  // Toggle shared status of a list
+  async function handleToggleShared(listId: string) {
+    // Find the list and toggle its shared state
+    const list = lists.find((l) => l.id === listId);
+    if (!list) return;
+    
+    const newSharedState = !list.shared;
+    
+    // Update UI immediately (optimistic update)
+    setLists(
+      lists.map((l) => (l.id === listId ? { ...l, shared: newSharedState } : l))
+    );
+
+    // Save to Supabase
+    const { error } = await supabase
+      .from('lists')
+      .update({ shared: newSharedState })
+      .eq('id', listId);
+
+    if (error) {
+      console.error('Error toggling shared status:', error);
+      // Could reload data here to restore the status if update failed
     }
   }
 
@@ -988,6 +1015,7 @@ export default function Home() {
                   }
                   onResize={handleResizeList}
                   onRenameList={handleRenameList}
+                  onToggleShared={handleToggleShared}
                   onCardClick={handleCardClick}
                   onToggleComplete={handleToggleComplete}
                   isArchiveView={searchQuery.trim() ? list.archived : isArchiveView}
