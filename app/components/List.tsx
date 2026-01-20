@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { List as ListType } from '../types';
+import { List as ListType, BoardType } from '../types';
 import SortableCard from './SortableCard';
 import { highlightText } from '../lib/highlightText';
 
@@ -12,6 +12,7 @@ interface ListProps {
   onCreateCard: (listId: string, title: string) => void;
   onDeleteCard: (cardId: string, listId: string) => void;
   onArchiveList: (listId: string) => void;
+  onMoveList?: (listId: string, targetBoard: BoardType) => void;
   onResize: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
   onToggleShared?: (listId: string) => void;
@@ -22,7 +23,7 @@ interface ListProps {
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onResize, onRenameList, onToggleShared, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onMoveList, onResize, onRenameList, onToggleShared, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -31,6 +32,10 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(list.title);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  
+  // State for move dropdown
+  const [showMoveDropdown, setShowMoveDropdown] = useState(false);
+  const moveDropdownRef = useRef<HTMLDivElement>(null);
   
   // State for resizing
   const [isResizing, setIsResizing] = useState(false);
@@ -169,6 +174,20 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
       document.body.style.userSelect = '';
     };
   }, [isResizing, list.id, onResize]);
+
+  // Close move dropdown when clicking outside
+  useEffect(() => {
+    if (!showMoveDropdown) return;
+    
+    function handleClickOutside(e: MouseEvent) {
+      if (moveDropdownRef.current && !moveDropdownRef.current.contains(e.target as Node)) {
+        setShowMoveDropdown(false);
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMoveDropdown]);
 
   return (
     <div
@@ -343,31 +362,83 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
             >
               + Add a card
             </button>
-            <button
-              onClick={handleArchiveList}
-              className={`transition-colors p-1.5 ${
-                isArchiveView 
-                  ? 'text-slate-400 hover:text-emerald-500' 
-                  : 'text-slate-400 hover:text-amber-500'
-              }`}
-              title={isArchiveView ? 'Unarchive list' : 'Archive list'}
-            >
-              {isArchiveView ? (
-                // Unarchive icon (arrow coming out of box)
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="17 11 12 6 7 11"></polyline>
-                  <line x1="12" y1="6" x2="12" y2="18"></line>
-                  <path d="M5 21h14a2 2 0 0 0 2-2v-5H3v5a2 2 0 0 0 2 2z"></path>
-                </svg>
-              ) : (
-                // Archive icon (box with arrow going in)
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="21 8 21 21 3 21 3 8"></polyline>
-                  <rect x="1" y="3" width="22" height="5"></rect>
-                  <line x1="10" y1="12" x2="14" y2="12"></line>
-                </svg>
+            <div className="flex items-center gap-0.5">
+              {/* Move to board button - only show when not in archive view */}
+              {!isArchiveView && onMoveList && (
+                <div className="relative" ref={moveDropdownRef}>
+                  <button
+                    onClick={() => setShowMoveDropdown(!showMoveDropdown)}
+                    className="text-slate-400 hover:text-blue-500 transition-colors p-1.5"
+                    title="Move to another board"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h14"></path>
+                      <path d="m12 5 7 7-7 7"></path>
+                    </svg>
+                  </button>
+                  {showMoveDropdown && (
+                    <div className="absolute bottom-full right-0 mb-1 bg-white border border-slate-200 rounded-md shadow-lg py-1 min-w-[120px] z-10">
+                      <div className="px-2 py-1 text-[10px] font-medium text-slate-400 uppercase">Move to</div>
+                      <button
+                        onClick={() => {
+                          onMoveList(list.id, 'work');
+                          setShowMoveDropdown(false);
+                        }}
+                        disabled={list.board === 'work'}
+                        className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                          list.board === 'work'
+                            ? 'text-slate-300 cursor-not-allowed'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        Work {list.board === 'work' && '✓'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          onMoveList(list.id, 'personal');
+                          setShowMoveDropdown(false);
+                        }}
+                        disabled={list.board === 'personal'}
+                        className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                          list.board === 'personal'
+                            ? 'text-slate-300 cursor-not-allowed'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        Personal {list.board === 'personal' && '✓'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
-            </button>
+              
+              {/* Archive button */}
+              <button
+                onClick={handleArchiveList}
+                className={`transition-colors p-1.5 ${
+                  isArchiveView 
+                    ? 'text-slate-400 hover:text-emerald-500' 
+                    : 'text-slate-400 hover:text-amber-500'
+                }`}
+                title={isArchiveView ? 'Unarchive list' : 'Archive list'}
+              >
+                {isArchiveView ? (
+                  // Unarchive icon (arrow coming out of box)
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="17 11 12 6 7 11"></polyline>
+                    <line x1="12" y1="6" x2="12" y2="18"></line>
+                    <path d="M5 21h14a2 2 0 0 0 2-2v-5H3v5a2 2 0 0 0 2 2z"></path>
+                  </svg>
+                ) : (
+                  // Archive icon (box with arrow going in)
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                    <rect x="1" y="3" width="22" height="5"></rect>
+                    <line x1="10" y1="12" x2="14" y2="12"></line>
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>

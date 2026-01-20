@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { List as ListType } from '../types';
+import { List as ListType, BoardType } from '../types';
 import List from './List';
 
 interface SortableListProps {
@@ -10,6 +10,7 @@ interface SortableListProps {
   onCreateCard: (listId: string, title: string) => void;
   onDeleteCard: (cardId: string, listId: string) => void;
   onArchiveList: (listId: string) => void;
+  onMoveList?: (listId: string, targetBoard: BoardType) => void;
   onResize: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
   onToggleShared?: (listId: string) => void;
@@ -24,6 +25,7 @@ export default function SortableList({
   onCreateCard,
   onDeleteCard,
   onArchiveList,
+  onMoveList,
   onResize,
   onRenameList,
   onToggleShared,
@@ -60,6 +62,7 @@ export default function SortableList({
         onCreateCard={onCreateCard}
         onDeleteCard={onDeleteCard}
         onArchiveList={onArchiveList}
+        onMoveList={onMoveList}
         onResize={onResize}
         onRenameList={onRenameList}
         onToggleShared={onToggleShared}

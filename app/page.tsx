@@ -656,6 +656,27 @@ export default function Home() {
     }
   }
 
+  // Move a list to another board
+  async function handleMoveList(listId: string, targetBoard: BoardType) {
+    // Find the list
+    const list = lists.find((l) => l.id === listId);
+    if (!list || list.board === targetBoard) return;
+    
+    // Update UI immediately (optimistic update) - remove from current view
+    setLists(lists.filter((l) => l.id !== listId));
+
+    // Save to Supabase
+    const { error } = await supabase
+      .from('lists')
+      .update({ board: targetBoard })
+      .eq('id', listId);
+
+    if (error) {
+      console.error('Error moving list:', error);
+      // Could reload data here to restore the list if move failed
+    }
+  }
+
   // Handle list resize
   async function handleResizeList(listId: string, newWidth: number) {
     // Update UI immediately (optimistic update)
@@ -1013,6 +1034,7 @@ export default function Home() {
                       ? (list.archived ? handleUnarchiveList : handleArchiveList)
                       : (isArchiveView ? handleUnarchiveList : handleArchiveList)
                   }
+                  onMoveList={handleMoveList}
                   onResize={handleResizeList}
                   onRenameList={handleRenameList}
                   onToggleShared={handleToggleShared}
