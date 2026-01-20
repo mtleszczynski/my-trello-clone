@@ -15,7 +15,7 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { supabase } from './lib/supabase';
-import { List as ListType, Card as CardType } from './types';
+import { List as ListType, Card as CardType, BoardType } from './types';
 import SortableList from './components/SortableList';
 import CardDetailsModal from './components/CardDetailsModal';
 import { useAuth } from './components/AuthProvider';
@@ -26,8 +26,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // State for view mode (main board vs archive)
-  const [viewMode, setViewMode] = useState<'main' | 'archive'>('main');
+  // State for view mode (board + archive status)
+  type ViewMode = 'work' | 'personal' | 'work-archive' | 'personal-archive';
+  const [viewMode, setViewMode] = useState<ViewMode>('work');
+  
+  // Helper to get board and archived status from viewMode
+  const getCurrentBoard = (): BoardType => viewMode.startsWith('personal') ? 'personal' : 'work';
+  const isArchiveView = viewMode.includes('archive');
   
   // State for search
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,7 +90,7 @@ export default function Home() {
     // Create lists
     const { data: createdLists, error: listsError } = await supabase
       .from('lists')
-      .insert(sampleLists.map(list => ({ ...list, user_id: userId, archived: false })))
+      .insert(sampleLists.map(list => ({ ...list, user_id: userId, archived: false, board: 'work' })))
       .select();
 
     if (listsError || !createdLists) {
@@ -145,6 +150,7 @@ export default function Home() {
       .from('lists')
       .select('*, cards(*)')
       .eq('user_id', userId)
+      .eq('board', 'work')
       .eq('archived', false)
       .order('position', { ascending: true });
 
@@ -169,15 +175,17 @@ export default function Home() {
       }
       setError(null);
 
-      // Build query - when searching, fetch ALL lists (both archived and non-archived)
+      // Build query - when searching, fetch ALL lists (both boards, archived and non-archived)
       let query = supabase
         .from('lists')
         .select('*, cards(*)')
         .eq('user_id', user.id);
       
-      // Only filter by archived status when NOT searching
+      // Only filter by board and archived status when NOT searching
       if (!searchQuery.trim()) {
-        query = query.eq('archived', viewMode === 'archive');
+        query = query
+          .eq('board', getCurrentBoard())
+          .eq('archived', isArchiveView);
       }
       
       const { data, error } = await query.order('position', { ascending: true });
@@ -189,8 +197,8 @@ export default function Home() {
         return;
       }
 
-      // If user has no lists on main board, create sample data (only once)
-      if (!searchQuery.trim() && viewMode === 'main' && data && data.length === 0 && !isCreatingSampleData.current) {
+      // If user has no lists on Work board, create sample data (only once)
+      if (!searchQuery.trim() && viewMode === 'work' && data && data.length === 0 && !isCreatingSampleData.current) {
         isCreatingSampleData.current = true;
         const sampleData = await createSampleData(user.id);
         isCreatingSampleData.current = false;
@@ -479,8 +487,8 @@ export default function Home() {
 
   // Create a new list
   async function handleCreateList() {
-    // Don't create if title is empty or not logged in
-    if (!newListTitle.trim() || !user) {
+    // Don't create if title is empty or not logged in or in archive view
+    if (!newListTitle.trim() || !user || isArchiveView) {
       return;
     }
 
@@ -495,6 +503,7 @@ export default function Home() {
         position: newPosition,
         width: 300,
         archived: false,
+        board: getCurrentBoard(),
         user_id: user.id,
       })
       .select()
@@ -844,24 +853,45 @@ export default function Home() {
             {/* View Mode Tabs */}
             <div className="flex gap-1">
               <button
-                onClick={() => setViewMode('main')}
+                onClick={() => setViewMode('work')}
                 className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors ${
-                  viewMode === 'main'
+                  viewMode === 'work'
                     ? 'bg-slate-700 text-slate-100'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                Board
+                Work
               </button>
               <button
-                onClick={() => setViewMode('archive')}
+                onClick={() => setViewMode('personal')}
                 className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors ${
-                  viewMode === 'archive'
+                  viewMode === 'personal'
                     ? 'bg-slate-700 text-slate-100'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                Archive
+                Personal
+              </button>
+              <span className="text-slate-600 px-1">|</span>
+              <button
+                onClick={() => setViewMode('work-archive')}
+                className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors ${
+                  viewMode === 'work-archive'
+                    ? 'bg-slate-700 text-slate-100'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                Work Archive
+              </button>
+              <button
+                onClick={() => setViewMode('personal-archive')}
+                className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors ${
+                  viewMode === 'personal-archive'
+                    ? 'bg-slate-700 text-slate-100'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                Pers Archive
               </button>
             </div>
           </div>
@@ -951,59 +981,61 @@ export default function Home() {
                   onCreateCard={handleCreateCard}
                   onDeleteCard={handleDeleteCard}
                   onArchiveList={
-                    // When searching, use list's actual archived status; otherwise use viewMode
+                    // When searching, use list's actual archived status; otherwise use isArchiveView
                     searchQuery.trim()
                       ? (list.archived ? handleUnarchiveList : handleArchiveList)
-                      : (viewMode === 'main' ? handleArchiveList : handleUnarchiveList)
+                      : (isArchiveView ? handleUnarchiveList : handleArchiveList)
                   }
                   onResize={handleResizeList}
                   onRenameList={handleRenameList}
                   onCardClick={handleCardClick}
                   onToggleComplete={handleToggleComplete}
-                  isArchiveView={searchQuery.trim() ? list.archived : viewMode === 'archive'}
+                  isArchiveView={searchQuery.trim() ? list.archived : isArchiveView}
                   searchQuery={searchQuery}
                 />
               ))}
 
-              {/* Add List Section */}
-              {isAddingList ? (
-                // Show input form when adding a list
-                <div className="flex-shrink-0 w-64 glass rounded-md p-2">
-                  <input
-                    type="text"
-                    placeholder="Enter list title..."
-                    value={newListTitle}
-                    onChange={(e) => setNewListTitle(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    autoFocus
-                    className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-slate-700 text-base sm:text-sm placeholder-slate-400"
-                  />
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={handleCreateList}
-                      className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-500 transition-colors"
-                    >
-                      Add list
-                    </button>
-                    <button
-                      onClick={() => {
-                        setNewListTitle('');
-                        setIsAddingList(false);
-                      }}
-                      className="text-slate-400 hover:text-slate-600 px-2 transition-colors"
-                    >
-                      ✕
-                    </button>
+              {/* Add List Section - only show when not in archive view */}
+              {!isArchiveView && (
+                isAddingList ? (
+                  // Show input form when adding a list
+                  <div className="flex-shrink-0 w-64 glass rounded-md p-2">
+                    <input
+                      type="text"
+                      placeholder="Enter list title..."
+                      value={newListTitle}
+                      onChange={(e) => setNewListTitle(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      autoFocus
+                      className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-slate-700 text-base sm:text-sm placeholder-slate-400"
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={handleCreateList}
+                        className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-500 transition-colors"
+                      >
+                        Add list
+                      </button>
+                      <button
+                        onClick={() => {
+                          setNewListTitle('');
+                          setIsAddingList(false);
+                        }}
+                        className="text-slate-400 hover:text-slate-600 px-2 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                // Show button when not adding
-                <button
-                  onClick={() => setIsAddingList(true)}
-                  className="flex-shrink-0 w-64 bg-white/30 hover:bg-white/50 border border-white/40 rounded-md px-3 py-2 text-slate-200 hover:text-white transition-all text-left text-sm"
-                >
-                  + Add a list
-                </button>
+                ) : (
+                  // Show button when not adding
+                  <button
+                    onClick={() => setIsAddingList(true)}
+                    className="flex-shrink-0 w-64 bg-white/30 hover:bg-white/50 border border-white/40 rounded-md px-3 py-2 text-slate-200 hover:text-white transition-all text-left text-sm"
+                  >
+                    + Add a list
+                  </button>
+                )
               )}
             </div>
           </SortableContext>

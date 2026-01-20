@@ -222,6 +222,14 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
             >
               {highlightText(list.title, searchQuery)}
             </span>
+            {/* Show board badge when searching */}
+            {searchQuery && (
+              <span className={`flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                list.board === 'personal' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+              }`}>
+                {list.board === 'personal' ? 'Pers' : 'Work'}
+              </span>
+            )}
             {/* Show Archived badge when searching and list is archived */}
             {searchQuery && list.archived && (
               <span className="flex-shrink-0 text-[10px] font-medium bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
