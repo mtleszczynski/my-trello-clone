@@ -13,6 +13,10 @@ interface CardProps {
 
 export default function Card({ card, onDelete, onClick, onToggleComplete, searchQuery = '' }: CardProps) {
   const hasDescription = card.description && card.description.trim().length > 0;
+  
+  // Check if search matches the description
+  const descriptionMatchesSearch = searchQuery.trim() && hasDescription && 
+    card.description.toLowerCase().includes(searchQuery.toLowerCase());
 
   return (
     <div 
@@ -61,8 +65,12 @@ export default function Card({ card, onDelete, onClick, onToggleComplete, search
           {/* Description icon - visible when not hovering (if card has description) */}
           {hasDescription && (
             <span
-              className="text-slate-400 block group-hover:hidden"
-              title="Has description"
+              className={`block group-hover:hidden ${
+                descriptionMatchesSearch 
+                  ? 'text-yellow-500 bg-yellow-100 rounded p-0.5 -m-0.5' 
+                  : 'text-slate-400'
+              }`}
+              title={descriptionMatchesSearch ? 'Description matches search' : 'Has description'}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
