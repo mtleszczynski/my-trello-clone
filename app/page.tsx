@@ -26,6 +26,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // State for view mode (main board vs archive)
+  const [viewMode, setViewMode] = useState<'main' | 'archive'>('main');
+  
   // State for adding a new list
   const [isAddingList, setIsAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -160,7 +163,7 @@ export default function Home() {
       const { data, error } = await supabase
         .from('lists')
         .select('*, cards(*)')
-        .eq('archived', false)
+        .eq('archived', viewMode === 'archive')
         .eq('user_id', user.id)
         .order('position', { ascending: true });
 
@@ -171,8 +174,8 @@ export default function Home() {
         return;
       }
 
-      // If user has no lists, create sample data (only once)
-      if (data && data.length === 0 && !isCreatingSampleData.current) {
+      // If user has no lists on main board, create sample data (only once)
+      if (viewMode === 'main' && data && data.length === 0 && !isCreatingSampleData.current) {
         isCreatingSampleData.current = true;
         const sampleData = await createSampleData(user.id);
         isCreatingSampleData.current = false;
@@ -189,7 +192,7 @@ export default function Home() {
     if (!authLoading) {
       fetchLists();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, viewMode]);
 
   // Handle drag start - track which item is being dragged
   function handleDragStart(event: DragStartEvent) {
@@ -567,17 +570,37 @@ export default function Home() {
     }
   }
 
-  // Delete a list (and all its cards)
-  async function handleDeleteList(listId: string) {
+  // Archive a list (move to archive)
+  async function handleArchiveList(listId: string) {
     // Update UI immediately (optimistic update)
     setLists(lists.filter((l) => l.id !== listId));
 
-    // Delete from Supabase (cards are deleted automatically due to CASCADE)
-    const { error } = await supabase.from('lists').delete().eq('id', listId);
+    // Update in Supabase to set archived = true
+    const { error } = await supabase
+      .from('lists')
+      .update({ archived: true })
+      .eq('id', listId);
 
     if (error) {
-      console.error('Error deleting list:', error);
-      // Could reload data here to restore the list if delete failed
+      console.error('Error archiving list:', error);
+      // Could reload data here to restore the list if archive failed
+    }
+  }
+
+  // Unarchive a list (move back to main board)
+  async function handleUnarchiveList(listId: string) {
+    // Update UI immediately (optimistic update)
+    setLists(lists.filter((l) => l.id !== listId));
+
+    // Update in Supabase to set archived = false
+    const { error } = await supabase
+      .from('lists')
+      .update({ archived: false })
+      .eq('id', listId);
+
+    if (error) {
+      console.error('Error unarchiving list:', error);
+      // Could reload data here to restore the list if unarchive failed
     }
   }
 
@@ -821,6 +844,30 @@ export default function Home() {
             </button>
           </div>
         </div>
+        
+        {/* View Mode Tabs */}
+        <div className="px-4 pb-2 flex gap-1">
+          <button
+            onClick={() => setViewMode('main')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              viewMode === 'main'
+                ? 'bg-slate-700 text-slate-100'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            Main Board
+          </button>
+          <button
+            onClick={() => setViewMode('archive')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              viewMode === 'archive'
+                ? 'bg-slate-700 text-slate-100'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            Archive
+          </button>
+        </div>
       </header>
 
       {/* Board */}
@@ -848,11 +895,12 @@ export default function Home() {
                   list={list}
                   onCreateCard={handleCreateCard}
                   onDeleteCard={handleDeleteCard}
-                  onDeleteList={handleDeleteList}
+                  onArchiveList={viewMode === 'main' ? handleArchiveList : handleUnarchiveList}
                   onResize={handleResizeList}
                   onRenameList={handleRenameList}
                   onCardClick={handleCardClick}
                   onToggleComplete={handleToggleComplete}
+                  isArchiveView={viewMode === 'archive'}
                 />
               ))}
 

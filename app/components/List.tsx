@@ -10,15 +10,16 @@ interface ListProps {
   list: ListType;
   onCreateCard: (listId: string, title: string) => void;
   onDeleteCard: (cardId: string, listId: string) => void;
-  onDeleteList: (listId: string) => void;
+  onArchiveList: (listId: string) => void;
   onResize: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
+  isArchiveView?: boolean;
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, onResize, onRenameList, onCardClick, onToggleComplete, dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onResize, onRenameList, onCardClick, onToggleComplete, isArchiveView = false, dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -63,15 +64,16 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
     }
   }
 
-  // Handle deleting the list (with confirmation)
-  function handleDeleteList() {
+  // Handle archiving/unarchiving the list (with confirmation)
+  function handleArchiveList() {
     const cardCount = (list.cards || []).length;
+    const action = isArchiveView ? 'Unarchive' : 'Archive';
     const message = cardCount > 0
-      ? `Delete "${list.title}" and its ${cardCount} card${cardCount > 1 ? 's' : ''}?`
-      : `Delete "${list.title}"?`;
+      ? `${action} "${list.title}" and its ${cardCount} card${cardCount > 1 ? 's' : ''}?`
+      : `${action} "${list.title}"?`;
     
     if (window.confirm(message)) {
-      onDeleteList(list.id);
+      onArchiveList(list.id);
     }
   }
 
@@ -304,14 +306,29 @@ export default function List({ list, onCreateCard, onDeleteCard, onDeleteList, o
               + Add a card
             </button>
             <button
-              onClick={handleDeleteList}
-              className="text-slate-400 hover:text-red-500 transition-colors p-1.5"
-              title="Delete list"
+              onClick={handleArchiveList}
+              className={`transition-colors p-1.5 ${
+                isArchiveView 
+                  ? 'text-slate-400 hover:text-emerald-500' 
+                  : 'text-slate-400 hover:text-amber-500'
+              }`}
+              title={isArchiveView ? 'Unarchive list' : 'Archive list'}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
+              {isArchiveView ? (
+                // Unarchive icon (arrow coming out of box)
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="17 11 12 6 7 11"></polyline>
+                  <line x1="12" y1="6" x2="12" y2="18"></line>
+                  <path d="M5 21h14a2 2 0 0 0 2-2v-5H3v5a2 2 0 0 0 2 2z"></path>
+                </svg>
+              ) : (
+                // Archive icon (box with arrow going in)
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                  <rect x="1" y="3" width="22" height="5"></rect>
+                  <line x1="10" y1="12" x2="14" y2="12"></line>
+                </svg>
+              )}
             </button>
           </div>
         )}

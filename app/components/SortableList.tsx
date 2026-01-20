@@ -9,22 +9,24 @@ interface SortableListProps {
   list: ListType;
   onCreateCard: (listId: string, title: string) => void;
   onDeleteCard: (cardId: string, listId: string) => void;
-  onDeleteList: (listId: string) => void;
+  onArchiveList: (listId: string) => void;
   onResize: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
+  isArchiveView?: boolean;
 }
 
 export default function SortableList({
   list,
   onCreateCard,
   onDeleteCard,
-  onDeleteList,
+  onArchiveList,
   onResize,
   onRenameList,
   onCardClick,
   onToggleComplete,
+  isArchiveView,
 }: SortableListProps) {
   const {
     attributes,
@@ -53,11 +55,12 @@ export default function SortableList({
         list={list}
         onCreateCard={onCreateCard}
         onDeleteCard={onDeleteCard}
-        onDeleteList={onDeleteList}
+        onArchiveList={onArchiveList}
         onResize={onResize}
         onRenameList={onRenameList}
         onCardClick={onCardClick}
         onToggleComplete={onToggleComplete}
+        isArchiveView={isArchiveView}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>
