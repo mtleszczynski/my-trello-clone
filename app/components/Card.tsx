@@ -20,7 +20,7 @@ export default function Card({ card, onDelete, onClick, onToggleComplete, search
 
   return (
     <div 
-      className={`group bg-white rounded-md p-2 cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all relative ${
+      className={`group bg-white rounded-md p-2 cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all relative shadow-sm ${
         card.completed ? 'opacity-50' : 'hover:translate-y-[-1px] hover:shadow-md'
       }`}
       onClick={onClick}
@@ -57,7 +57,7 @@ export default function Card({ card, onDelete, onClick, onToggleComplete, search
         </button>
 
         <p className={`text-xs flex-1 pr-4 leading-relaxed ${
-          card.completed ? 'text-slate-400 line-through' : 'text-slate-700'
+          card.completed ? 'text-slate-400 line-through' : 'text-slate-900'
         }`}>{highlightText(card.title, searchQuery)}</p>
         
         {/* Icon container - positioned on the right */}
