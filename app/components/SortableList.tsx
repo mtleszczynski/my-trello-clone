@@ -15,6 +15,7 @@ interface SortableListProps {
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
   isArchiveView?: boolean;
+  searchQuery?: string;
 }
 
 export default function SortableList({
@@ -27,6 +28,7 @@ export default function SortableList({
   onCardClick,
   onToggleComplete,
   isArchiveView,
+  searchQuery,
 }: SortableListProps) {
   const {
     attributes,
@@ -61,6 +63,7 @@ export default function SortableList({
         onCardClick={onCardClick}
         onToggleComplete={onToggleComplete}
         isArchiveView={isArchiveView}
+        searchQuery={searchQuery}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>

@@ -1,15 +1,17 @@
 'use client';
 
 import { Card as CardType } from '../types';
+import { highlightText } from '../lib/highlightText';
 
 interface CardProps {
   card: CardType;
   onDelete: () => void;
   onClick?: () => void;
   onToggleComplete?: () => void;
+  searchQuery?: string;
 }
 
-export default function Card({ card, onDelete, onClick, onToggleComplete }: CardProps) {
+export default function Card({ card, onDelete, onClick, onToggleComplete, searchQuery = '' }: CardProps) {
   const hasDescription = card.description && card.description.trim().length > 0;
 
   return (
@@ -52,7 +54,7 @@ export default function Card({ card, onDelete, onClick, onToggleComplete }: Card
 
         <p className={`text-xs flex-1 pr-4 leading-relaxed ${
           card.completed ? 'text-slate-400 line-through' : 'text-slate-700'
-        }`}>{card.title}</p>
+        }`}>{highlightText(card.title, searchQuery)}</p>
         
         {/* Icon container - positioned on the right */}
         <div className="absolute right-2 top-2">

@@ -29,6 +29,9 @@ export default function Home() {
   // State for view mode (main board vs archive)
   const [viewMode, setViewMode] = useState<'main' | 'archive'>('main');
   
+  // State for search
+  const [searchQuery, setSearchQuery] = useState('');
+  
   // State for adding a new list
   const [isAddingList, setIsAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -148,6 +151,9 @@ export default function Home() {
     return finalData;
   }
 
+  // Track if this is the initial load
+  const hasInitiallyLoaded = useRef(false);
+
   // Fetch lists from Supabase when the page loads (only when user is logged in)
   useEffect(() => {
     async function fetchLists() {
@@ -157,15 +163,24 @@ export default function Home() {
         return;
       }
 
-      setLoading(true);
+      // Only show loading screen on initial load, not when searching
+      if (!hasInitiallyLoaded.current) {
+        setLoading(true);
+      }
       setError(null);
 
-      const { data, error } = await supabase
+      // Build query - when searching, fetch ALL lists (both archived and non-archived)
+      let query = supabase
         .from('lists')
         .select('*, cards(*)')
-        .eq('archived', viewMode === 'archive')
-        .eq('user_id', user.id)
-        .order('position', { ascending: true });
+        .eq('user_id', user.id);
+      
+      // Only filter by archived status when NOT searching
+      if (!searchQuery.trim()) {
+        query = query.eq('archived', viewMode === 'archive');
+      }
+      
+      const { data, error } = await query.order('position', { ascending: true });
 
       if (error) {
         console.error('Error fetching lists:', error);
@@ -175,7 +190,7 @@ export default function Home() {
       }
 
       // If user has no lists on main board, create sample data (only once)
-      if (viewMode === 'main' && data && data.length === 0 && !isCreatingSampleData.current) {
+      if (!searchQuery.trim() && viewMode === 'main' && data && data.length === 0 && !isCreatingSampleData.current) {
         isCreatingSampleData.current = true;
         const sampleData = await createSampleData(user.id);
         isCreatingSampleData.current = false;
@@ -186,13 +201,14 @@ export default function Home() {
         setLists(data || []);
       }
       
+      hasInitiallyLoaded.current = true;
       setLoading(false);
     }
 
     if (!authLoading) {
       fetchLists();
     }
-  }, [user, authLoading, viewMode]);
+  }, [user, authLoading, viewMode, searchQuery]);
 
   // Handle drag start - track which item is being dragged
   function handleDragStart(event: DragStartEvent) {
@@ -850,8 +866,45 @@ export default function Home() {
             </div>
           </div>
           
-          {/* User info and sign out */}
+          {/* Search and User info */}
           <div className="flex items-center gap-3">
+            {/* Search Input */}
+            <div className="relative">
+              <svg
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-40 sm:w-52 pl-8 pr-3 py-1.5 text-sm bg-slate-800 border border-slate-600 rounded-md text-slate-200 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              )}
+            </div>
+            
             {user.user_metadata?.avatar_url && (
               <img
                 src={user.user_metadata.avatar_url}
@@ -897,12 +950,18 @@ export default function Home() {
                   list={list}
                   onCreateCard={handleCreateCard}
                   onDeleteCard={handleDeleteCard}
-                  onArchiveList={viewMode === 'main' ? handleArchiveList : handleUnarchiveList}
+                  onArchiveList={
+                    // When searching, use list's actual archived status; otherwise use viewMode
+                    searchQuery.trim()
+                      ? (list.archived ? handleUnarchiveList : handleArchiveList)
+                      : (viewMode === 'main' ? handleArchiveList : handleUnarchiveList)
+                  }
                   onResize={handleResizeList}
                   onRenameList={handleRenameList}
                   onCardClick={handleCardClick}
                   onToggleComplete={handleToggleComplete}
-                  isArchiveView={viewMode === 'archive'}
+                  isArchiveView={searchQuery.trim() ? list.archived : viewMode === 'archive'}
+                  searchQuery={searchQuery}
                 />
               ))}
 

@@ -5,6 +5,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { List as ListType } from '../types';
 import SortableCard from './SortableCard';
+import { highlightText } from '../lib/highlightText';
 
 interface ListProps {
   list: ListType;
@@ -16,10 +17,11 @@ interface ListProps {
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
   isArchiveView?: boolean;
+  searchQuery?: string;
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onResize, onRenameList, onCardClick, onToggleComplete, isArchiveView = false, dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onResize, onRenameList, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -212,13 +214,21 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
             className="font-medium text-slate-700 flex-1 text-sm bg-white border border-blue-500 rounded px-1.5 py-0.5 focus:outline-none"
           />
         ) : (
-          <span
-            onClick={handleStartEditingTitle}
-            className="font-medium text-slate-700 flex-1 text-sm cursor-pointer hover:bg-slate-200/50 rounded px-1.5 py-0.5 -mx-1.5 -my-0.5"
-            title="Click to rename"
-          >
-            {list.title}
-          </span>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span
+              onClick={handleStartEditingTitle}
+              className="font-medium text-slate-700 text-sm cursor-pointer hover:bg-slate-200/50 rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 truncate"
+              title="Click to rename"
+            >
+              {highlightText(list.title, searchQuery)}
+            </span>
+            {/* Show Archived badge when searching and list is archived */}
+            {searchQuery && list.archived && (
+              <span className="flex-shrink-0 text-[10px] font-medium bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                Archived
+              </span>
+            )}
+          </div>
         )}
         
         {/* Resize Handle */}
@@ -251,6 +261,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
                 onDelete={() => onDeleteCard(card.id, list.id)}
                 onClick={() => onCardClick?.(card.id)}
                 onToggleComplete={() => onToggleComplete?.(card.id)}
+                searchQuery={searchQuery}
               />
             ))
           ) : (

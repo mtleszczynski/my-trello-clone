@@ -10,9 +10,10 @@ interface SortableCardProps {
   onDelete: () => void;
   onClick?: () => void;
   onToggleComplete?: () => void;
+  searchQuery?: string;
 }
 
-export default function SortableCard({ card, onDelete, onClick, onToggleComplete }: SortableCardProps) {
+export default function SortableCard({ card, onDelete, onClick, onToggleComplete, searchQuery }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -30,7 +31,7 @@ export default function SortableCard({ card, onDelete, onClick, onToggleComplete
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card card={card} onDelete={onDelete} onClick={onClick} onToggleComplete={onToggleComplete} />
+      <Card card={card} onDelete={onDelete} onClick={onClick} onToggleComplete={onToggleComplete} searchQuery={searchQuery} />
     </div>
   );
 }
