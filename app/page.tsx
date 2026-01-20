@@ -821,8 +821,34 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-dark">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md border-b border-slate-700/50">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-100">My Trello Clone</h1>
+        <div className="px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-semibold text-slate-100">My Trello Clone</h1>
+            
+            {/* View Mode Tabs */}
+            <div className="flex gap-1">
+              <button
+                onClick={() => setViewMode('main')}
+                className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors ${
+                  viewMode === 'main'
+                    ? 'bg-slate-700 text-slate-100'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                Board
+              </button>
+              <button
+                onClick={() => setViewMode('archive')}
+                className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors ${
+                  viewMode === 'archive'
+                    ? 'bg-slate-700 text-slate-100'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                Archive
+              </button>
+            </div>
+          </div>
           
           {/* User info and sign out */}
           <div className="flex items-center gap-3">
@@ -843,30 +869,6 @@ export default function Home() {
               Sign out
             </button>
           </div>
-        </div>
-        
-        {/* View Mode Tabs */}
-        <div className="px-4 pb-2 flex gap-1">
-          <button
-            onClick={() => setViewMode('main')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              viewMode === 'main'
-                ? 'bg-slate-700 text-slate-100'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            Main Board
-          </button>
-          <button
-            onClick={() => setViewMode('archive')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              viewMode === 'archive'
-                ? 'bg-slate-700 text-slate-100'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            Archive
-          </button>
         </div>
       </header>
 
