@@ -13,9 +13,14 @@ interface CardDetailsModalProps {
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 800;
 const MIN_HEIGHT = 250;
-const MAX_HEIGHT = 600;
 const DEFAULT_WIDTH = 448;
 const DEFAULT_HEIGHT = 320;
+
+// Calculate max height based on viewport (leave some padding)
+function getMaxHeight(): number {
+  if (typeof window === 'undefined') return 600;
+  return Math.max(400, window.innerHeight - 100);
+}
 
 // Calculate initial height based on description length
 function calculateInitialHeight(description: string): number {
@@ -25,7 +30,7 @@ function calculateInitialHeight(description: string): number {
   const estimatedLines = Math.ceil(description.length / 50);
   const estimatedHeight = DEFAULT_HEIGHT + (estimatedLines * 20);
   
-  return Math.max(DEFAULT_HEIGHT, Math.min(MAX_HEIGHT, estimatedHeight));
+  return Math.max(DEFAULT_HEIGHT, Math.min(getMaxHeight(), estimatedHeight));
 }
 
 // Get saved size from localStorage
@@ -38,7 +43,7 @@ function getSavedSize(): { width: number; height: number } | null {
       if (parsed.width && parsed.height) {
         return {
           width: Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parsed.width)),
-          height: Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, parsed.height)),
+          height: Math.max(MIN_HEIGHT, Math.min(getMaxHeight(), parsed.height)),
         };
       }
     }
@@ -154,7 +159,7 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
       
       const newSize = {
         width: Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth)),
-        height: Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, newHeight)),
+        height: Math.max(MIN_HEIGHT, Math.min(getMaxHeight(), newHeight)),
       };
       
       setSize(newSize);
