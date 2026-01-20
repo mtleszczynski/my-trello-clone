@@ -10,18 +10,63 @@ interface CardDetailsModalProps {
   onDelete: (cardId: string) => void;
 }
 
+const MIN_WIDTH = 320;
+const MAX_WIDTH = 800;
+const MIN_HEIGHT = 250;
+const MAX_HEIGHT = 600;
+const DEFAULT_WIDTH = 448;
+const DEFAULT_HEIGHT = 320;
+
+// Calculate initial height based on description length
+function calculateInitialHeight(description: string): number {
+  if (!description) return DEFAULT_HEIGHT;
+  
+  // Estimate: ~50 chars per line, ~20px per line, plus padding
+  const estimatedLines = Math.ceil(description.length / 50);
+  const estimatedHeight = DEFAULT_HEIGHT + (estimatedLines * 20);
+  
+  return Math.max(DEFAULT_HEIGHT, Math.min(MAX_HEIGHT, estimatedHeight));
+}
+
+// Get saved size from localStorage
+function getSavedSize(): { width: number; height: number } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem('cardModalSize');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.width && parsed.height) {
+        return {
+          width: Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parsed.width)),
+          height: Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, parsed.height)),
+        };
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return null;
+}
+
+// Save size to localStorage
+function saveSize(size: { width: number; height: number }) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('cardModalSize', JSON.stringify(size));
+  } catch {
+    // Ignore errors
+  }
+}
+
 export default function CardDetailsModal({ card, onClose, onSave, onDelete }: CardDetailsModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   
   // Resize state
-  const [size, setSize] = useState({ width: 448, height: 320 }); // Default size (max-w-md = 28rem = 448px)
+  const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
   const [isResizing, setIsResizing] = useState(false);
+  const justFinishedResizing = useRef(false);
   const modalRef = useRef<HTMLDivElement>(null);
-  const MIN_WIDTH = 320;
-  const MAX_WIDTH = 800;
-  const MIN_HEIGHT = 250;
-  const MAX_HEIGHT = 600;
 
   // Update form when card changes
   useEffect(() => {
@@ -30,6 +75,28 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
       setDescription(card.description || '');
     }
   }, [card]);
+
+  // Set initial size when modal opens
+  useEffect(() => {
+    if (card) {
+      // First check for saved size
+      const savedSize = getSavedSize();
+      if (savedSize) {
+        // Use saved size, but expand height if description needs more space
+        const autoHeight = calculateInitialHeight(card.description || '');
+        setSize({
+          width: savedSize.width,
+          height: Math.max(savedSize.height, autoHeight),
+        });
+      } else {
+        // No saved size - calculate based on description
+        setSize({
+          width: DEFAULT_WIDTH,
+          height: calculateInitialHeight(card.description || ''),
+        });
+      }
+    }
+  }, [card?.id, card?.description]);
 
   // Handle saving
   function handleSave() {
@@ -65,6 +132,15 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
     setIsResizing(true);
   }
 
+  // Handle backdrop click - don't close if we just finished resizing
+  function handleBackdropClick() {
+    if (justFinishedResizing.current) {
+      justFinishedResizing.current = false;
+      return;
+    }
+    onClose();
+  }
+
   // Handle resize during drag
   useEffect(() => {
     if (!isResizing) return;
@@ -76,14 +152,23 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
       const newWidth = e.clientX - rect.left;
       const newHeight = e.clientY - rect.top;
       
-      setSize({
+      const newSize = {
         width: Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth)),
         height: Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, newHeight)),
-      });
+      };
+      
+      setSize(newSize);
     }
 
     function handleMouseUp() {
       setIsResizing(false);
+      justFinishedResizing.current = true;
+      // Save the size when user finishes resizing
+      saveSize(size);
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        justFinishedResizing.current = false;
+      }, 100);
     }
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -97,14 +182,7 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
     };
-  }, [isResizing]);
-
-  // Reset size when modal opens with a new card
-  useEffect(() => {
-    if (card) {
-      setSize({ width: 448, height: 320 });
-    }
-  }, [card?.id]);
+  }, [isResizing, size]);
 
   // Don't render if no card
   if (!card) return null;
@@ -112,7 +190,7 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
   return (
     <div
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 pt-12 sm:p-4 overflow-hidden"
-      onClick={onClose}
+      onClick={handleBackdropClick}
     >
       <div
         ref={modalRef}
