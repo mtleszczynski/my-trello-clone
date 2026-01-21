@@ -12,6 +12,7 @@ interface SortableListProps {
   onArchiveList: (listId: string) => void;
   onMoveList?: (listId: string, targetBoard: BoardType) => void;
   onResize: (listId: string, newWidth: number) => void;
+  onResizeEnd?: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
   onToggleShared?: (listId: string) => void;
   onCardClick?: (cardId: string) => void;
@@ -27,6 +28,7 @@ export default function SortableList({
   onArchiveList,
   onMoveList,
   onResize,
+  onResizeEnd,
   onRenameList,
   onToggleShared,
   onCardClick,
@@ -64,6 +66,7 @@ export default function SortableList({
         onArchiveList={onArchiveList}
         onMoveList={onMoveList}
         onResize={onResize}
+        onResizeEnd={onResizeEnd}
         onRenameList={onRenameList}
         onToggleShared={onToggleShared}
         onCardClick={onCardClick}

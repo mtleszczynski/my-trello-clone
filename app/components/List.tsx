@@ -14,6 +14,7 @@ interface ListProps {
   onArchiveList: (listId: string) => void;
   onMoveList?: (listId: string, targetBoard: BoardType) => void;
   onResize: (listId: string, newWidth: number) => void;
+  onResizeEnd?: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
   onToggleShared?: (listId: string) => void;
   onCardClick?: (cardId: string) => void;
@@ -23,7 +24,7 @@ interface ListProps {
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onMoveList, onResize, onRenameList, onToggleShared, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onMoveList, onResize, onResizeEnd, onRenameList, onToggleShared, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -127,6 +128,16 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
     setIsResizing(true);
   }
 
+  // Track the current width during resize
+  const currentWidthRef = useRef(list.width);
+  
+  // Keep the ref in sync with prop when not resizing
+  useEffect(() => {
+    if (!isResizing) {
+      currentWidthRef.current = list.width;
+    }
+  }, [list.width, isResizing]);
+
   // Handle resize during drag (mouse and touch)
   useEffect(() => {
     if (!isResizing) return;
@@ -139,6 +150,9 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
       
       // Enforce min/max constraints
       const constrainedWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+      
+      // Track the current width
+      currentWidthRef.current = constrainedWidth;
       
       // Update width immediately (optimistic update)
       onResize(list.id, constrainedWidth);
@@ -156,6 +170,8 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
 
     function handleEnd() {
       setIsResizing(false);
+      // Save the final width to database
+      onResizeEnd?.(list.id, currentWidthRef.current);
     }
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -173,7 +189,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
       document.removeEventListener('touchend', handleEnd);
       document.body.style.userSelect = '';
     };
-  }, [isResizing, list.id, onResize]);
+  }, [isResizing, list.id, onResize, onResizeEnd]);
 
   // Close move dropdown when clicking outside
   useEffect(() => {

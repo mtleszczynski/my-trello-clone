@@ -677,13 +677,16 @@ export default function Home() {
     }
   }
 
-  // Handle list resize
-  async function handleResizeList(listId: string, newWidth: number) {
+  // Handle list resize (UI update only - called on every mouse move)
+  function handleResizeList(listId: string, newWidth: number) {
     // Update UI immediately (optimistic update)
     setLists(
       lists.map((l) => (l.id === listId ? { ...l, width: newWidth } : l))
     );
+  }
 
+  // Handle list resize end (save to database - called once on mouse up)
+  async function handleResizeListEnd(listId: string, newWidth: number) {
     // Save to Supabase
     const { error } = await supabase
       .from('lists')
@@ -1036,6 +1039,7 @@ export default function Home() {
                   }
                   onMoveList={handleMoveList}
                   onResize={handleResizeList}
+                  onResizeEnd={handleResizeListEnd}
                   onRenameList={handleRenameList}
                   onToggleShared={handleToggleShared}
                   onCardClick={handleCardClick}
