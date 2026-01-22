@@ -207,7 +207,20 @@ export default function Home() {
           setLists(sampleData);
         }
       } else {
-        setLists(data || []);
+        // Preserve local width values to avoid race conditions with resize saves
+        // This ensures that if a user resizes a list and quickly switches boards,
+        // the local width is preserved even if the database save hasn't completed yet
+        setLists((currentLists) => {
+          const currentWidthMap = new Map(currentLists.map(l => [l.id, l.width]));
+          return (data || []).map(list => {
+            const localWidth = currentWidthMap.get(list.id);
+            // If we have a local width for this list, preserve it
+            if (localWidth !== undefined) {
+              return { ...list, width: localWidth };
+            }
+            return list;
+          });
+        });
       }
       
       hasInitiallyLoaded.current = true;
