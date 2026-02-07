@@ -4,22 +4,38 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
+// Check if dev bypass mode is enabled
+const isDevBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === 'true';
+
+// Fake user for dev bypass mode (only used locally, never hits the database)
+const DEV_USER = {
+  id: 'dev-bypass-user',
+  app_metadata: {},
+  user_metadata: { full_name: 'Dev User', avatar_url: '' },
+  aud: 'authenticated',
+  created_at: new Date().toISOString(),
+} as User;
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  isDevBypass: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(isDevBypass ? DEV_USER : null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isDevBypass ? false : true);
 
   useEffect(() => {
+    // Skip real auth in dev bypass mode
+    if (isDevBypass) return;
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -60,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signInWithGoogle, signOut, isDevBypass }}>
       {children}
     </AuthContext.Provider>
   );

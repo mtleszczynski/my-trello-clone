@@ -17,6 +17,7 @@ interface ListProps {
   onResizeEnd?: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
   onToggleShared?: (listId: string) => void;
+  onToggleMinimized?: (listId: string) => void;
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
   isArchiveView?: boolean;
@@ -24,7 +25,7 @@ interface ListProps {
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onMoveList, onResize, onResizeEnd, onRenameList, onToggleShared, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
+export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onMoveList, onResize, onResizeEnd, onRenameList, onToggleShared, onToggleMinimized, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -205,6 +206,91 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showMoveDropdown]);
 
+  // Minimized view
+  if (list.minimized) {
+    return (
+      <div
+        ref={listRef}
+        className="flex-shrink-0 flex flex-col glass rounded-md max-h-[calc(100vh-80px)] relative items-center"
+        style={{ width: '40px' }}
+      >
+        {/* Expand button + drag handle area */}
+        <div className="py-2 flex flex-col items-center gap-1 border-b border-slate-200/60 w-full">
+          {/* Drag Handle */}
+          <div
+            {...dragHandleProps}
+            className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 touch-none transition-colors"
+            title="Drag to reorder"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9" cy="5" r="1" />
+              <circle cx="9" cy="12" r="1" />
+              <circle cx="9" cy="19" r="1" />
+              <circle cx="15" cy="5" r="1" />
+              <circle cx="15" cy="12" r="1" />
+              <circle cx="15" cy="19" r="1" />
+            </svg>
+          </div>
+          {/* Expand button */}
+          <button
+            onClick={() => onToggleMinimized?.(list.id)}
+            className="text-slate-400 hover:text-blue-500 transition-colors p-0.5"
+            title="Expand list"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="13 17 18 12 13 7"></polyline>
+              <polyline points="6 17 11 12 6 7"></polyline>
+            </svg>
+          </button>
+        </div>
+
+        {/* Vertical title + checkboxes area */}
+        <div
+          ref={setNodeRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-1 py-2 min-h-[40px] custom-scrollbar w-full"
+        >
+          {/* Vertical title */}
+          <div className="relative w-full flex justify-center" style={{ height: `${Math.max(60, list.title.length * 7)}px` }}>
+            <span
+              className="absolute font-medium text-slate-500 text-[11px] whitespace-nowrap origin-center"
+              style={{
+                writingMode: 'vertical-rl',
+                textOrientation: 'mixed',
+                transform: 'rotate(180deg)',
+              }}
+              title={list.title}
+            >
+              {list.title}
+            </span>
+          </div>
+
+          {/* Checkbox-only cards (read-only) */}
+          {sortedCards.length > 0 && (
+            <div className="flex flex-col items-center gap-1 mt-1">
+              {sortedCards.map((card) => (
+                <div
+                  key={card.id}
+                  className={`w-3.5 h-3.5 rounded-sm border flex-shrink-0 flex items-center justify-center ${
+                    card.completed
+                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                      : 'border-slate-300 bg-white'
+                  }`}
+                  title={card.title}
+                >
+                  {card.completed && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={listRef}
@@ -293,6 +379,20 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
           </button>
         )}
         
+        {/* Minimize Button */}
+        {!isArchiveView && onToggleMinimized && (
+          <button
+            onClick={() => onToggleMinimized(list.id)}
+            className="text-slate-400 hover:text-blue-500 transition-colors p-0.5"
+            title="Minimize list"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="11 17 6 12 11 7"></polyline>
+              <polyline points="18 17 13 12 18 7"></polyline>
+            </svg>
+          </button>
+        )}
+
         {/* Resize Handle */}
         <button
           onMouseDown={handleResizeStart}

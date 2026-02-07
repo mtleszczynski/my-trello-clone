@@ -15,6 +15,7 @@ interface SortableListProps {
   onResizeEnd?: (listId: string, newWidth: number) => void;
   onRenameList: (listId: string, newTitle: string) => void;
   onToggleShared?: (listId: string) => void;
+  onToggleMinimized?: (listId: string) => void;
   onCardClick?: (cardId: string) => void;
   onToggleComplete?: (cardId: string) => void;
   isArchiveView?: boolean;
@@ -31,6 +32,7 @@ export default function SortableList({
   onResizeEnd,
   onRenameList,
   onToggleShared,
+  onToggleMinimized,
   onCardClick,
   onToggleComplete,
   isArchiveView,
@@ -54,8 +56,21 @@ export default function SortableList({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
   };
+
+  if (isDragging) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={{
+          ...style,
+          width: list.minimized ? '40px' : `${list.width}px`,
+          minHeight: '80px',
+        }}
+        className="flex-shrink-0 rounded-lg border-2 border-dashed border-slate-300/70 bg-slate-200/30 backdrop-blur-sm"
+      />
+    );
+  }
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -69,6 +84,7 @@ export default function SortableList({
         onResizeEnd={onResizeEnd}
         onRenameList={onRenameList}
         onToggleShared={onToggleShared}
+        onToggleMinimized={onToggleMinimized}
         onCardClick={onCardClick}
         onToggleComplete={onToggleComplete}
         isArchiveView={isArchiveView}

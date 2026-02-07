@@ -12,6 +12,7 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  CollisionDetection,
 } from '@dnd-kit/core';
 import { arrayMove, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { supabase } from './lib/supabase';
@@ -21,7 +22,7 @@ import CardDetailsModal from './components/CardDetailsModal';
 import { useAuth } from './components/AuthProvider';
 
 export default function Home() {
-  const { user, loading: authLoading, signInWithGoogle, signOut } = useAuth();
+  const { user, loading: authLoading, signInWithGoogle, signOut, isDevBypass } = useAuth();
   const [lists, setLists] = useState<ListType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +77,26 @@ export default function Home() {
     })
   );
 
+  // Custom collision detection: when dragging a list, only consider list droppables
+  // (ignore card droppables so the list SortableContext gets the correct overIndex)
+  const customCollisionDetection: CollisionDetection = (args) => {
+    const activeId = args.active.id as string;
+
+    if (activeId.startsWith('list-')) {
+      // Filter to only list droppables so the sort transform works correctly
+      const listContainers = (args.droppableContainers as { id: string | number }[]).filter(
+        (container) => (container.id as string).startsWith('list-')
+      );
+      return closestCorners({
+        ...args,
+        droppableContainers: listContainers as typeof args.droppableContainers,
+      });
+    }
+
+    // For cards, use default closestCorners with all droppables
+    return closestCorners(args);
+  };
+
   // Create sample data for new users
   async function createSampleData(userId: string) {
     // Sample lists with different widths
@@ -90,7 +111,7 @@ export default function Home() {
     // Create lists
     const { data: createdLists, error: listsError } = await supabase
       .from('lists')
-      .insert(sampleLists.map(list => ({ ...list, user_id: userId, archived: false, board: 'work', shared: false })))
+      .insert(sampleLists.map(list => ({ ...list, user_id: userId, archived: false, board: 'work', shared: false, minimized: false })))
       .select();
 
     if (listsError || !createdLists) {
@@ -160,11 +181,76 @@ export default function Home() {
   // Track if this is the initial load
   const hasInitiallyLoaded = useRef(false);
 
+  // Generate mock data for dev bypass mode (no database needed)
+  function getDevMockData(): ListType[] {
+    const now = new Date().toISOString();
+    const userId = 'dev-bypass-user';
+    const board = getCurrentBoard();
+    return [
+      {
+        id: 'mock-list-1', title: '📋 To Do', position: 0, width: 240,
+        archived: false, board, shared: false, minimized: false, user_id: userId, created_at: now,
+        cards: [
+          { id: 'mock-card-1', title: 'Review weekly goals', description: '', position: 0, list_id: 'mock-list-1', user_id: userId, completed: false, created_at: now },
+          { id: 'mock-card-2', title: 'Reply to emails', description: '', position: 1, list_id: 'mock-list-1', user_id: userId, completed: false, created_at: now },
+          { id: 'mock-card-3', title: 'Schedule team meeting', description: '', position: 2, list_id: 'mock-list-1', user_id: userId, completed: false, created_at: now },
+          { id: 'mock-card-4', title: 'Update project timeline', description: '', position: 3, list_id: 'mock-list-1', user_id: userId, completed: false, created_at: now },
+        ],
+      },
+      {
+        id: 'mock-list-2', title: '🚀 In Progress', position: 1, width: 300,
+        archived: false, board, shared: false, minimized: false, user_id: userId, created_at: now,
+        cards: [
+          { id: 'mock-card-5', title: 'Design new dashboard layout', description: 'Focus on mobile responsiveness and accessibility.', position: 0, list_id: 'mock-list-2', user_id: userId, completed: false, created_at: now },
+          { id: 'mock-card-6', title: 'Write documentation', description: '', position: 1, list_id: 'mock-list-2', user_id: userId, completed: false, created_at: now },
+          { id: 'mock-card-7', title: 'Fix login bug', description: 'Users on Safari are seeing a timeout error.', position: 2, list_id: 'mock-list-2', user_id: userId, completed: false, created_at: now },
+        ],
+      },
+      {
+        id: 'mock-list-3', title: '✅ Completed', position: 2, width: 240,
+        archived: false, board, shared: false, minimized: false, user_id: userId, created_at: now,
+        cards: [
+          { id: 'mock-card-8', title: 'Set up project repository', description: '', position: 0, list_id: 'mock-list-3', user_id: userId, completed: true, created_at: now },
+          { id: 'mock-card-9', title: 'Create database schema', description: '', position: 1, list_id: 'mock-list-3', user_id: userId, completed: true, created_at: now },
+          { id: 'mock-card-10', title: 'Implement user authentication', description: '', position: 2, list_id: 'mock-list-3', user_id: userId, completed: true, created_at: now },
+          { id: 'mock-card-11', title: 'Add drag and drop', description: '', position: 3, list_id: 'mock-list-3', user_id: userId, completed: false, created_at: now },
+        ],
+      },
+      {
+        id: 'mock-list-4', title: '💡 Ideas & Notes', position: 3, width: 380,
+        archived: false, board, shared: false, minimized: false, user_id: userId, created_at: now,
+        cards: [
+          { id: 'mock-card-12', title: 'Add dark mode support', description: 'Many users prefer dark mode for frequent-use apps.', position: 0, list_id: 'mock-list-4', user_id: userId, completed: false, created_at: now },
+          { id: 'mock-card-13', title: 'Keyboard shortcuts for power users', description: 'N for new card, L for new list, arrows to navigate.', position: 1, list_id: 'mock-list-4', user_id: userId, completed: false, created_at: now },
+        ],
+      },
+      {
+        id: 'mock-list-5', title: '📚 Resources', position: 4, width: 280,
+        archived: false, board, shared: false, minimized: false, user_id: userId, created_at: now,
+        cards: [
+          { id: 'mock-card-14', title: 'React documentation', description: '', position: 0, list_id: 'mock-list-5', user_id: userId, completed: false, created_at: now },
+          { id: 'mock-card-15', title: 'Tailwind CSS cheatsheet', description: '', position: 1, list_id: 'mock-list-5', user_id: userId, completed: false, created_at: now },
+          { id: 'mock-card-16', title: 'Supabase guides', description: 'Check out the auth and real-time sections', position: 2, list_id: 'mock-list-5', user_id: userId, completed: false, created_at: now },
+        ],
+      },
+    ];
+  }
+
   // Fetch lists from Supabase when the page loads (only when user is logged in)
   useEffect(() => {
     async function fetchLists() {
       if (!user) {
         setLists([]);
+        setLoading(false);
+        return;
+      }
+
+      // In dev bypass mode, use mock data instead of querying Supabase
+      if (isDevBypass) {
+        if (!hasInitiallyLoaded.current) {
+          setLists(getDevMockData());
+          hasInitiallyLoaded.current = true;
+        }
         setLoading(false);
         return;
       }
@@ -423,12 +509,14 @@ export default function Home() {
           
           setLists(reorderedLists);
           
-          // Save to Supabase
-          for (const list of reorderedLists) {
-            await supabase
-              .from('lists')
-              .update({ position: list.position })
-              .eq('id', list.id);
+          // Save to Supabase (skip in dev bypass mode)
+          if (!isDevBypass) {
+            for (const list of reorderedLists) {
+              await supabase
+                .from('lists')
+                .update({ position: list.position })
+                .eq('id', list.id);
+            }
           }
         }
       }
@@ -462,36 +550,38 @@ export default function Home() {
       return;
     }
 
-    // Save to Supabase
-    const { sourceListId } = dragStartState.current;
-    
-    // Update the card's list_id and position
-    await supabase
-      .from('cards')
-      .update({ 
-        list_id: currentList.id, 
-        position: currentCard.position 
-      })
-      .eq('id', activeId);
-
-    // Update positions in current list
-    const currentListCards = (currentList.cards || []).filter((c) => c.id !== activeId);
-    for (const card of currentListCards) {
+    // Save to Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { sourceListId } = dragStartState.current;
+      
+      // Update the card's list_id and position
       await supabase
         .from('cards')
-        .update({ position: card.position })
-        .eq('id', card.id);
-    }
+        .update({ 
+          list_id: currentList.id, 
+          position: currentCard.position 
+        })
+        .eq('id', activeId);
 
-    // If moved to different list, update source list positions too
-    if (sourceListId !== currentList.id) {
-      const sourceList = lists.find((l) => l.id === sourceListId);
-      if (sourceList) {
-        for (const card of sourceList.cards || []) {
-          await supabase
-            .from('cards')
-            .update({ position: card.position })
-            .eq('id', card.id);
+      // Update positions in current list
+      const currentListCards = (currentList.cards || []).filter((c) => c.id !== activeId);
+      for (const card of currentListCards) {
+        await supabase
+          .from('cards')
+          .update({ position: card.position })
+          .eq('id', card.id);
+      }
+
+      // If moved to different list, update source list positions too
+      if (sourceListId !== currentList.id) {
+        const sourceList = lists.find((l) => l.id === sourceListId);
+        if (sourceList) {
+          for (const card of sourceList.cards || []) {
+            await supabase
+              .from('cards')
+              .update({ position: card.position })
+              .eq('id', card.id);
+          }
         }
       }
     }
@@ -509,6 +599,27 @@ export default function Home() {
     // Calculate position for new list (at the end)
     const newPosition = lists.length;
 
+    // In dev bypass mode, create with a mock ID (no database)
+    if (isDevBypass) {
+      const mockList: ListType = {
+        id: `mock-list-${Date.now()}`,
+        title: newListTitle.trim(),
+        position: newPosition,
+        width: 300,
+        archived: false,
+        board: getCurrentBoard(),
+        shared: false,
+        minimized: false,
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        cards: [],
+      };
+      setLists([...lists, mockList]);
+      setNewListTitle('');
+      setIsAddingList(false);
+      return;
+    }
+
     // Save to Supabase
     const { data, error } = await supabase
       .from('lists')
@@ -519,6 +630,7 @@ export default function Home() {
         archived: false,
         board: getCurrentBoard(),
         shared: false,
+        minimized: false,
         user_id: user.id,
       })
       .select()
@@ -558,6 +670,28 @@ export default function Home() {
 
     // Calculate position for new card (at the end)
     const newPosition = (list.cards || []).length;
+
+    // In dev bypass mode, create with a mock ID (no database)
+    if (isDevBypass) {
+      const mockCard: CardType = {
+        id: `mock-card-${Date.now()}`,
+        title: title.trim(),
+        description: '',
+        position: newPosition,
+        list_id: listId,
+        user_id: user.id,
+        completed: false,
+        created_at: new Date().toISOString(),
+      };
+      setLists(
+        lists.map((l) =>
+          l.id === listId
+            ? { ...l, cards: [...(l.cards || []), mockCard] }
+            : l
+        )
+      );
+      return;
+    }
 
     // Save to Supabase
     const { data, error } = await supabase
@@ -601,12 +735,13 @@ export default function Home() {
       )
     );
 
-    // Delete from Supabase
-    const { error } = await supabase.from('cards').delete().eq('id', cardId);
+    // Delete from Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase.from('cards').delete().eq('id', cardId);
 
-    if (error) {
-      console.error('Error deleting card:', error);
-      // Could reload data here to restore the card if delete failed
+      if (error) {
+        console.error('Error deleting card:', error);
+      }
     }
   }
 
@@ -615,15 +750,16 @@ export default function Home() {
     // Update UI immediately (optimistic update)
     setLists(lists.filter((l) => l.id !== listId));
 
-    // Update in Supabase to set archived = true
-    const { error } = await supabase
-      .from('lists')
-      .update({ archived: true })
-      .eq('id', listId);
+    // Update in Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase
+        .from('lists')
+        .update({ archived: true })
+        .eq('id', listId);
 
-    if (error) {
-      console.error('Error archiving list:', error);
-      // Could reload data here to restore the list if archive failed
+      if (error) {
+        console.error('Error archiving list:', error);
+      }
     }
   }
 
@@ -632,15 +768,16 @@ export default function Home() {
     // Update UI immediately (optimistic update)
     setLists(lists.filter((l) => l.id !== listId));
 
-    // Update in Supabase to set archived = false
-    const { error } = await supabase
-      .from('lists')
-      .update({ archived: false })
-      .eq('id', listId);
+    // Update in Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase
+        .from('lists')
+        .update({ archived: false })
+        .eq('id', listId);
 
-    if (error) {
-      console.error('Error unarchiving list:', error);
-      // Could reload data here to restore the list if unarchive failed
+      if (error) {
+        console.error('Error unarchiving list:', error);
+      }
     }
   }
 
@@ -657,15 +794,16 @@ export default function Home() {
       lists.map((l) => (l.id === listId ? { ...l, shared: newSharedState } : l))
     );
 
-    // Save to Supabase
-    const { error } = await supabase
-      .from('lists')
-      .update({ shared: newSharedState })
-      .eq('id', listId);
+    // Save to Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase
+        .from('lists')
+        .update({ shared: newSharedState })
+        .eq('id', listId);
 
-    if (error) {
-      console.error('Error toggling shared status:', error);
-      // Could reload data here to restore the status if update failed
+      if (error) {
+        console.error('Error toggling shared status:', error);
+      }
     }
   }
 
@@ -678,15 +816,42 @@ export default function Home() {
     // Update UI immediately (optimistic update) - remove from current view
     setLists(lists.filter((l) => l.id !== listId));
 
-    // Save to Supabase
-    const { error } = await supabase
-      .from('lists')
-      .update({ board: targetBoard })
-      .eq('id', listId);
+    // Save to Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase
+        .from('lists')
+        .update({ board: targetBoard })
+        .eq('id', listId);
 
-    if (error) {
-      console.error('Error moving list:', error);
-      // Could reload data here to restore the list if move failed
+      if (error) {
+        console.error('Error moving list:', error);
+      }
+    }
+  }
+
+  // Handle toggling minimized state of a list
+  async function handleToggleMinimized(listId: string) {
+    // Find the list and toggle its minimized state
+    const list = lists.find((l) => l.id === listId);
+    if (!list) return;
+    
+    const newMinimizedState = !list.minimized;
+    
+    // Update UI immediately (optimistic update)
+    setLists(
+      lists.map((l) => (l.id === listId ? { ...l, minimized: newMinimizedState } : l))
+    );
+
+    // Save to Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase
+        .from('lists')
+        .update({ minimized: newMinimizedState })
+        .eq('id', listId);
+
+      if (error) {
+        console.error('Error toggling minimized state:', error);
+      }
     }
   }
 
@@ -700,6 +865,9 @@ export default function Home() {
 
   // Handle list resize end (save to database - called once on mouse up)
   async function handleResizeListEnd(listId: string, newWidth: number) {
+    // Skip database save in dev bypass mode
+    if (isDevBypass) return;
+
     // Save to Supabase
     const { error } = await supabase
       .from('lists')
@@ -708,7 +876,6 @@ export default function Home() {
 
     if (error) {
       console.error('Error updating list width:', error);
-      // Could reload data here to restore the width if update failed
     }
   }
 
@@ -738,15 +905,16 @@ export default function Home() {
       }))
     );
 
-    // Save to Supabase
-    const { error } = await supabase
-      .from('cards')
-      .update({ title, description })
-      .eq('id', cardId);
+    // Save to Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase
+        .from('cards')
+        .update({ title, description })
+        .eq('id', cardId);
 
-    if (error) {
-      console.error('Error updating card:', error);
-      // Could reload data here to restore the card if update failed
+      if (error) {
+        console.error('Error updating card:', error);
+      }
     }
   }
 
@@ -769,15 +937,16 @@ export default function Home() {
       }))
     );
 
-    // Save to Supabase
-    const { error } = await supabase
-      .from('cards')
-      .update({ completed: newCompletedState })
-      .eq('id', cardId);
+    // Save to Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase
+        .from('cards')
+        .update({ completed: newCompletedState })
+        .eq('id', cardId);
 
-    if (error) {
-      console.error('Error updating card completion:', error);
-      // Could reload data here to restore the card if update failed
+      if (error) {
+        console.error('Error updating card completion:', error);
+      }
     }
   }
 
@@ -790,15 +959,16 @@ export default function Home() {
       )
     );
 
-    // Save to Supabase
-    const { error } = await supabase
-      .from('lists')
-      .update({ title: newTitle })
-      .eq('id', listId);
+    // Save to Supabase (skip in dev bypass mode)
+    if (!isDevBypass) {
+      const { error } = await supabase
+        .from('lists')
+        .update({ title: newTitle })
+        .eq('id', listId);
 
-    if (error) {
-      console.error('Error renaming list:', error);
-      // Could reload data here to restore the title if update failed
+      if (error) {
+        console.error('Error renaming list:', error);
+      }
     }
   }
 
@@ -1030,7 +1200,7 @@ export default function Home() {
       >
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={customCollisionDetection}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
@@ -1055,6 +1225,7 @@ export default function Home() {
                   onResizeEnd={handleResizeListEnd}
                   onRenameList={handleRenameList}
                   onToggleShared={handleToggleShared}
+                  onToggleMinimized={handleToggleMinimized}
                   onCardClick={handleCardClick}
                   onToggleComplete={handleToggleComplete}
                   isArchiveView={searchQuery.trim() ? list.archived : isArchiveView}
@@ -1134,12 +1305,23 @@ export default function Home() {
               </div>
             ) : null}
             {activeList ? (
-              <div className="glass rounded-md shadow-xl p-2.5 rotate-1" style={{ width: `${activeList.width}px` }}>
-                <p className="font-medium text-slate-700 text-sm">{activeList.title}</p>
-                <p className="text-slate-500 text-xs mt-1">
-                  {(activeList.cards || []).length} card{(activeList.cards || []).length !== 1 ? 's' : ''}
-                </p>
-              </div>
+              activeList.minimized ? (
+                <div className="glass rounded-md shadow-xl py-2.5 px-1 rotate-1 flex flex-col items-center" style={{ width: '40px' }}>
+                  <span
+                    className="font-medium text-slate-500 text-[11px] whitespace-nowrap"
+                    style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)' }}
+                  >
+                    {activeList.title}
+                  </span>
+                </div>
+              ) : (
+                <div className="glass rounded-md shadow-xl p-2.5 rotate-1" style={{ width: `${activeList.width}px` }}>
+                  <p className="font-medium text-slate-700 text-sm">{activeList.title}</p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {(activeList.cards || []).length} card{(activeList.cards || []).length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              )
             ) : null}
           </DragOverlay>
         </DndContext>
