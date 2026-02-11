@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card as CardType } from '../types';
+
+type SaveStatus = 'saved' | 'saving' | 'unsaved';
 
 interface CardDetailsModalProps {
   card: CardType | null;
@@ -67,19 +69,81 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   
+  // Auto-save state
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedIndicatorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedValues = useRef<{ title: string; description: string }>({ title: '', description: '' });
+
   // Resize state
   const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
   const [isResizing, setIsResizing] = useState(false);
   const justFinishedResizing = useRef(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Update form when card changes
+  // Save the current values to the database
+  const doSave = useCallback((cardId: string, newTitle: string, newDescription: string) => {
+    const trimmedTitle = newTitle.trim();
+    const trimmedDesc = newDescription.trim();
+    
+    // Skip if nothing changed since last save
+    if (trimmedTitle === lastSavedValues.current.title && trimmedDesc === lastSavedValues.current.description) {
+      setSaveStatus('saved');
+      return;
+    }
+    
+    setSaveStatus('saving');
+    onSave(cardId, trimmedTitle, trimmedDesc);
+    lastSavedValues.current = { title: trimmedTitle, description: trimmedDesc };
+    
+    // Show "Saved" after a brief moment
+    if (savedIndicatorTimer.current) clearTimeout(savedIndicatorTimer.current);
+    savedIndicatorTimer.current = setTimeout(() => {
+      setSaveStatus('saved');
+    }, 500);
+  }, [onSave]);
+
+  // Schedule a debounced save (1 second after user stops typing)
+  const scheduleSave = useCallback((cardId: string, newTitle: string, newDescription: string) => {
+    setSaveStatus('unsaved');
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      doSave(cardId, newTitle, newDescription);
+    }, 1000);
+  }, [doSave]);
+
+  // Flush any pending save immediately (used when closing)
+  const flushSave = useCallback(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    if (card && saveStatus === 'unsaved') {
+      doSave(card.id, title, description);
+    }
+  }, [card, title, description, saveStatus, doSave]);
+
+  // Handle title change with auto-save
+  function handleTitleChange(newTitle: string) {
+    setTitle(newTitle);
+    if (card) scheduleSave(card.id, newTitle, description);
+  }
+
+  // Handle description change with auto-save
+  function handleDescriptionChange(newDescription: string) {
+    setDescription(newDescription);
+    if (card) scheduleSave(card.id, title, newDescription);
+  }
+
+  // Update form when a DIFFERENT card is opened (not when same card's data updates from parent)
   useEffect(() => {
     if (card) {
       setTitle(card.title);
       setDescription(card.description || '');
+      lastSavedValues.current = { title: card.title, description: card.description || '' };
+      setSaveStatus('saved');
     }
-  }, [card]);
+  }, [card?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Set initial size when modal opens
   useEffect(() => {
@@ -103,10 +167,17 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
     }
   }, [card?.id, card?.description]);
 
-  // Handle saving
-  function handleSave() {
-    if (!card) return;
-    onSave(card.id, title.trim(), description.trim());
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      if (savedIndicatorTimer.current) clearTimeout(savedIndicatorTimer.current);
+    };
+  }, []);
+
+  // Handle closing - flush any pending save first
+  function handleClose() {
+    flushSave();
     onClose();
   }
 
@@ -114,6 +185,11 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
   function handleDelete() {
     if (!card) return;
     if (window.confirm(`Delete "${card.title}"?`)) {
+      // Cancel any pending save since the card is being deleted
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+        debounceTimer.current = null;
+      }
       onDelete(card.id);
       onClose();
     }
@@ -122,11 +198,11 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
   // Handle keyboard shortcuts
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') {
-      onClose();
+      handleClose();
     }
-    // Ctrl/Cmd + Enter to save
+    // Ctrl/Cmd + Enter to save immediately
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      handleSave();
+      flushSave();
     }
   }
 
@@ -143,7 +219,7 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
       justFinishedResizing.current = false;
       return;
     }
-    onClose();
+    handleClose();
   }
 
   // Handle resize during drag
@@ -206,9 +282,28 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
       >
         {/* Header */}
         <div className="px-3 py-2 sm:px-4 sm:py-3 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-slate-700">Card Details</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-medium text-slate-700">Card Details</h2>
+            {/* Auto-save status indicator */}
+            <span className={`text-xs transition-opacity duration-300 ${
+              saveStatus === 'saved' ? 'text-emerald-500' :
+              saveStatus === 'saving' ? 'text-blue-500' :
+              'text-amber-500'
+            }`}>
+              {saveStatus === 'saved' && (
+                <span className="flex items-center gap-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Saved
+                </span>
+              )}
+              {saveStatus === 'saving' && 'Saving...'}
+              {saveStatus === 'unsaved' && 'Editing...'}
+            </span>
+          </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-slate-600 transition-colors p-0.5"
             title="Close (Esc)"
           >
@@ -229,7 +324,7 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => handleTitleChange(e.target.value)}
               className="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 text-base sm:text-sm text-slate-700 placeholder-slate-400"
               placeholder="Enter card title..."
             />
@@ -242,7 +337,7 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
             </label>
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => handleDescriptionChange(e.target.value)}
               className="w-full flex-1 px-2.5 py-1.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-500 resize-none text-base sm:text-sm text-slate-700 placeholder-slate-400 min-h-[80px]"
               placeholder="Add a more detailed description..."
             />
@@ -257,20 +352,12 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
           >
             Delete
           </button>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 text-slate-500 hover:text-slate-700 transition-colors text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-500 transition-colors"
-            >
-              Save
-            </button>
-          </div>
+          <button
+            onClick={handleClose}
+            className="px-3 py-1.5 bg-slate-600 text-white rounded text-sm font-medium hover:bg-slate-500 transition-colors"
+          >
+            Close
+          </button>
         </div>
 
         {/* Resize Handle */}
