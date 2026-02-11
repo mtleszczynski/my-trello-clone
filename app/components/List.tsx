@@ -211,8 +211,8 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
     return (
       <div
         ref={listRef}
-        className="flex-shrink-0 flex flex-col glass rounded-md max-h-[calc(100vh-80px)] relative items-center"
-        style={{ width: '40px' }}
+        className="flex-shrink-0 flex flex-col glass rounded-md max-h-[calc(100vh-80px)] relative items-center overflow-hidden"
+        style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}
       >
         {/* Expand button + drag handle area */}
         <div className="py-2 flex flex-col items-center gap-1 border-b border-slate-200/60 w-full">
