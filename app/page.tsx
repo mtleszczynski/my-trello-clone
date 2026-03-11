@@ -1077,7 +1077,7 @@ export default function Home() {
   const listIds = lists.map((list) => `list-${list.id}`);
 
   return (
-    <div className="min-h-screen bg-gradient-dark">
+    <div className="h-screen overflow-hidden flex flex-col bg-gradient-dark">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md border-b border-slate-700/50">
         <div className="px-4 py-2.5 flex items-center justify-between">
@@ -1192,7 +1192,7 @@ export default function Home() {
       {/* Board */}
       <main 
         ref={boardRef}
-        className={`p-3 pb-8 overflow-x-auto hide-scrollbar relative mobile-scroll min-h-[calc(100vh-56px)] ${isDraggingBoard ? 'cursor-grabbing select-none' : ''}`}
+        className={`p-3 pb-8 overflow-x-auto overflow-y-hidden hide-scrollbar relative mobile-scroll flex-1 ${isDraggingBoard ? 'cursor-grabbing select-none' : ''}`}
         onMouseDown={handleBoardMouseDown}
         onMouseMove={handleBoardMouseMove}
         onMouseUp={handleBoardMouseUp}
