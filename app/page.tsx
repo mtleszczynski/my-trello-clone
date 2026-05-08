@@ -1077,15 +1077,16 @@ export default function Home() {
   const listIds = lists.map((list) => `list-${list.id}`);
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col bg-gradient-dark">
+    <div className="h-dvh overflow-hidden flex flex-col bg-gradient-dark">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md border-b border-slate-700/50">
-        <div className="px-4 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-lg font-semibold text-slate-100">My Trello Clone</h1>
+        <div className="px-4 py-2.5 overflow-x-auto hide-scrollbar">
+        <div className="flex items-center justify-between gap-4 min-w-max">
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <h1 className="text-lg font-semibold text-slate-100 whitespace-nowrap leading-tight">My Trello Clone</h1>
             
             {/* View Mode Tabs */}
-            <div className="flex gap-1">
+            <div className="flex gap-1 flex-shrink-0">
               <button
                 onClick={() => setViewMode('work')}
                 className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors ${
@@ -1131,7 +1132,7 @@ export default function Home() {
           </div>
           
           {/* Search and User info */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0">
             {/* Search Input */}
             <div className="relative">
               <svg
@@ -1187,6 +1188,7 @@ export default function Home() {
             </button>
           </div>
         </div>
+        </div>
       </header>
 
       {/* Board */}
@@ -1206,7 +1208,7 @@ export default function Home() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
-            <div className="flex gap-3 items-start pr-8">
+            <div className="flex gap-3 items-start pr-8 h-full">
               {/* Display all lists */}
               {lists.map((list) => (
                 <SortableList

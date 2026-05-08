@@ -211,7 +211,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
     return (
       <div
         ref={listRef}
-        className="flex-shrink-0 flex flex-col glass rounded-md max-h-[calc(100vh-80px)] relative items-center overflow-hidden"
+        className="flex-shrink-0 flex flex-col glass rounded-md max-h-[calc(100dvh-80px)] relative items-center overflow-hidden"
         style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}
       >
         {/* Expand button + drag handle area */}
@@ -294,7 +294,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
   return (
     <div
       ref={listRef}
-      className="flex-shrink-0 flex flex-col glass rounded-md max-h-[calc(100vh-80px)] relative group"
+      className="flex-shrink-0 flex flex-col glass rounded-md max-h-[calc(100dvh-80px)] relative group"
       style={{ width: `${list.width}px` }}
     >
       {/* List Header */}
