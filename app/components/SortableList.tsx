@@ -73,7 +73,7 @@ export default function SortableList({
   }
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className="h-full">
       <List
         list={list}
         onCreateCard={onCreateCard}
