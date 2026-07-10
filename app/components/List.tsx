@@ -149,8 +149,11 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
       const rect = listRef.current.getBoundingClientRect();
       const newWidth = clientX - rect.left;
       
-      // Enforce min/max constraints
-      const constrainedWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+      // Enforce min/max constraints and round to a whole number
+      // (the DB width column is an INTEGER, so fractional pixels fail to save)
+      const constrainedWidth = Math.round(
+        Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth))
+      );
       
       // Track the current width
       currentWidthRef.current = constrainedWidth;

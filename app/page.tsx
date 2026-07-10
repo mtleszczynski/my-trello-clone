@@ -868,10 +868,13 @@ export default function Home() {
     // Skip database save in dev bypass mode
     if (isDevBypass) return;
 
+    // The width column is an INTEGER, so round to avoid save failures
+    const width = Math.round(newWidth);
+
     // Save to Supabase
     const { error } = await supabase
       .from('lists')
-      .update({ width: newWidth })
+      .update({ width })
       .eq('id', listId);
 
     if (error) {
