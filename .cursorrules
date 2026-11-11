@@ -8,77 +8,82 @@
 
 ## Project Overview
 A personal Trello clone with resizable lists. Simpler than Trello but with the key features needed for personal task management.
+`README.md` explains how it works; `PROJECT_PLAN.md` lists what's done, known limitations and ideas.
 
-## Core Features (in order of implementation)
-1. Display lists from database
-2. Create new lists with names
-3. Display cards/items in lists
-4. Create new cards
-5. Delete cards
-6. Delete lists
-7. Reorder cards within a list (drag and drop)
-8. Move cards between lists (drag and drop)
-9. Reorder lists (drag and drop)
-10. Resize list widths (drag to resize)
-11. Card details modal (click to open, add text details)
-12. Mark cards as completed (checkbox/strikethrough)
-13. Archive lists (move to archive board)
-14. Search/filter lists and cards
+## Features (all built)
+- Work and Personal boards, each with an archive; lists can be moved between boards or shared on both
+- Lists: create, rename, resize width, minimize, drag to reorder, archive/unarchive
+- Cards: create, delete, tick off, drag to reorder or move between lists
+- Card details modal with auto-saving title and description
+- Search across both boards and archives (highlights matches; doesn't hide non-matches)
+- Google sign-in; Row Level Security keeps each user's data private
 
 ## Tech Stack
-- Next.js 16 with App Router
-- TypeScript
+- Next.js 16 with App Router (read `node_modules/next/dist/docs/` for current APIs - see AGENTS.md)
+- TypeScript, React 19
 - Tailwind CSS v4
-- Supabase for database
+- Supabase for database and auth
 - @dnd-kit/core and @dnd-kit/sortable for drag and drop
-- React 19
+- Playwright for tests
 
 ## Code Style
 - Use functional components with hooks
 - Use TypeScript interfaces for props and data types
 - Keep components small and focused (one job per component)
 - Use async/await for Supabase operations
-- Always handle errors from Supabase queries
+- Always handle errors from Supabase queries, and show them to the user (not just console.error)
 - Use optimistic UI updates (update UI immediately, then sync with database)
+- Use functional state updates (`setLists(prev => ...)`) after any `await`, so changes made in the meantime aren't overwritten
 
 ## File Organization
-- Pages in `app/` directory (Next.js App Router)
-- Components in `app/components/`
-- Utilities and Supabase client in `app/lib/`
-- Types/interfaces in `app/types/` (create when needed)
+- `app/page.tsx` - main page; only wires hooks and components together
+- `app/hooks/` - `useBoard` (loading + all saving), `useBoardDragAndDrop`, `useDragToScroll`
+- `app/components/` - UI components
+- `app/lib/` - Supabase client, `positions.ts` (ordering), `board.ts` helpers, `sampleData.ts`
+- `app/types/` - TypeScript types, including `ListActions` (everything a list can ask the board to do)
+- `supabase/schema.sql` - complete current database setup
+- `supabase/migrations/` - every database change, oldest first
+- `tests/` - Playwright tests and the fake Supabase they use
 
-## Supabase Patterns
-- Always check for errors: `if (error) { console.error(...); return; }`
-- Update local state first for responsive UI
-- Use `.select()` to get data back after insert/update
-- Use proper TypeScript types for database responses
+## Saving Changes (Supabase Patterns)
+- All writes go through `enqueueSave(what, save)` in `useBoard.ts`: saves run one at a time in order, and failures
+  show a red banner. `what` is a phrase like 'renaming the list' ("Something went wrong renaming the list.")
+- Use the `updateCard` / `updateList` / `removeListFromView` helpers in `useBoard.ts` for simple field changes
+- Board fetches wait for the save queue, and ignore responses from older fetches
+- Use `.select()` to get data back after insert
+- Dev bypass mode (`NEXT_PUBLIC_DEV_BYPASS_AUTH=true`) uses demo data and skips all saves
+
+## Ordering (positions)
+- `position` columns are fractional (DOUBLE PRECISION). Never renumber a whole list to save a move
+- Moving an item: build the final order, call `repositionAfterMove(ordered, movedId)` from `app/lib/positions.ts`,
+  apply the returned updates locally and save only those (usually one row)
+- New items go at `nextPosition(items)` (highest position + 1), never at `items.length`
 
 ## Drag and Drop (@dnd-kit)
-- Use @dnd-kit/core for base functionality
-- Use @dnd-kit/sortable for sortable lists
-- Update positions in database after drag completes
-- Use string IDs for draggable items
 - Use DragOverlay for smooth drag visuals (prevents flickering/layout shifts)
-- Use closestCorners collision detection for cross-list card movement
+- Use closestCorners collision detection; when dragging a list, only consider list droppables
 - Prefix list IDs with 'list-' to distinguish from card IDs (e.g., `list-${list.id}`)
-- Use onDragOver for real-time preview of card movement between lists
-- Handle both sortable ID formats: 'list-{id}' and raw '{id}' when dropping
+- onDragOver only moves a card into a different list (for the live preview); reordering within a list happens in onDragEnd
+- onDragEnd works out positions from the snapshot taken at drag start (the database values), not the preview
+- onDragCancel restores the snapshot
+- Handle both droppable ID formats: 'list-{id}' and raw '{id}' (see `findDropTarget` in `app/lib/board.ts`)
 
 ## Styling Guidelines
 - Use Tailwind CSS utility classes
 - Keep design clean and minimal
-- Use consistent spacing (p-4, gap-2, etc.)
-- Use gray-50, gray-100 for backgrounds
-- Use gray-900 for text
+- Dark slate background with light "glass" lists and white cards
 - Use blue-500/blue-600 for interactive elements
 - Make buttons and interactive elements obvious
 - Keep UI elements consistent (e.g., delete buttons should look/behave the same everywhere)
 - Use hover-to-show for secondary actions (delete buttons appear on hover)
 - Use Tailwind group/group-hover for parent-triggered hover effects
+- Inputs use 16px text on mobile (`text-base sm:text-sm`) so iOS doesn't zoom in
 
 ## Database Tables
-- lists: id, title, position, width, archived, created_at
-- cards: id, title, description, position, list_id, completed, created_at
+- lists: id, user_id, title, position, width, board ('work'/'personal'), shared, archived, minimized, created_at
+- cards: id, user_id, list_id, title, description, position, completed, created_at
+- Database changes: add a dated file to `supabase/migrations/`, update `supabase/schema.sql` to match,
+  and have the user run the SQL in Supabase (SQL Editor) BEFORE pushing code that depends on it
 
 ## Communication Style
 - Give simple, step-by-step instructions
@@ -87,19 +92,21 @@ A personal Trello clone with resizable lists. Simpler than Trello but with the k
 - Don't assume technical knowledge
 - Be explicit about where to click, what to type, etc.
 - When referencing external services (Supabase, GitHub, Vercel), give exact navigation paths
-- Run terminal commands directly instead of asking user to copy-paste (use run_terminal_cmd tool)
+- Run terminal commands directly instead of asking the user to copy-paste
 - When something doesn't work, fix it immediately rather than asking for more details
 
 ## Git Workflow
+- Run `npm test` before committing; all tests must pass
 - Commit after each feature is working
 - Use clear commit messages: "Add list creation", "Add card drag and drop"
 - Push to GitHub after significant progress
 - Vercel auto-deploys from GitHub
 - **Always tell the user when it's a good time to push** with a reminder like:
-  - "Good time to push: [reason]"
-  - Suggest the exact commands to run
+ - "Good time to push: [reason]"
+ - Suggest the exact commands to run
 
 ## Testing Approach
-- Test each feature manually after building
-- Check both local (localhost:3000) and deployed (Vercel) versions
-- Verify data persists in Supabase
+- `npm test` builds the app and runs Playwright tests against a fake Supabase (`tests/fake-supabase.ts`) - no real data is touched
+- Add or update a test when adding a feature or fixing a bug
+- Also test manually: local (localhost:3000, demo mode) and deployed (Vercel, real data)
+- Verify data persists by reloading the page
