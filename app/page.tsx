@@ -16,6 +16,14 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { supabase } from './lib/supabase';
+import {
+  sortByPosition,
+  nextPosition,
+  positionBetween,
+  repositionAfterMove,
+  applyPositionUpdates,
+  PositionUpdate,
+} from './lib/positions';
 import { List as ListType, Card as CardType, BoardType } from './types';
 import SortableList from './components/SortableList';
 import CardDetailsModal from './components/CardDetailsModal';
@@ -50,8 +58,16 @@ export default function Home() {
   // State for card details modal
   const [selectedCard, setSelectedCard] = useState<CardType | null>(null);
   
-  // Track the original state before drag started (for saving to Supabase)
-  const dragStartState = useRef<{ cardId: string; sourceListId: string } | null>(null);
+  // Board as it was when the current drag started (restored if the drag is cancelled)
+  const dragSnapshot = useRef<ListType[] | null>(null);
+
+  // Saves run one at a time, in order, so a later change can never be overwritten by an earlier one.
+  // Fetches wait for this queue so they never show data from before our own saves finished.
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Bumped to re-fetch the board (e.g. when the tab becomes visible again)
+  const [refreshCount, setRefreshCount] = useState(0);
   
   // Prevent duplicate sample data creation
   const isCreatingSampleData = useRef(false);
@@ -96,6 +112,48 @@ export default function Home() {
     // For cards, use default closestCorners with all droppables
     return closestCorners(args);
   };
+
+  // Queue a database write. Failures are shown to the user instead of silently ignored.
+  function enqueueSave(what: string, save: () => PromiseLike<{ error: { message: string } | null }>) {
+    saveQueue.current = saveQueue.current.then(async () => {
+      const { error } = await save();
+      if (error) {
+        console.error(`Error saving ${what}:`, error);
+        setSaveError(`Couldn't save ${what}.`);
+      }
+    });
+  }
+
+  // Save several position updates in one go and report the first error, if any
+  function savePositions(
+    table: 'cards' | 'lists',
+    updates: PositionUpdate[],
+    extraFields: Record<string, Record<string, unknown>> = {}
+  ) {
+    return Promise.all(
+      updates.map((update) =>
+        supabase
+          .from(table)
+          .update({ position: update.position, ...extraFields[update.id] })
+          .eq('id', update.id)
+      )
+    ).then((results) => ({ error: results.find((result) => result.error)?.error ?? null }));
+  }
+
+  // Find the list a card is currently in
+  function findListIdOfCard(source: ListType[], cardId: string): string | undefined {
+    return source.find((list) => (list.cards || []).some((card) => card.id === cardId))?.id;
+  }
+
+  // Work out which list (and which card in it, if any) something is being dragged over.
+  // The id can be 'list-{id}' (sortable list), '{id}' (list's card area) or a card id.
+  function findDropTarget(source: ListType[], overId: string): { listId: string; overCardId: string | null } | null {
+    const list = source.find((l) => l.id === overId || `list-${l.id}` === overId);
+    if (list) return { listId: list.id, overCardId: null };
+
+    const listId = findListIdOfCard(source, overId);
+    return listId ? { listId, overCardId: overId } : null;
+  }
 
   // Create sample data for new users
   async function createSampleData(userId: string) {
@@ -236,8 +294,23 @@ export default function Home() {
     ];
   }
 
-  // Fetch lists from Supabase when the page loads (only when user is logged in)
+  // Re-fetch when coming back to the tab, so changes made on another device show up
   useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        setRefreshCount((count) => count + 1);
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  // Fetch lists from Supabase when the page loads (only when user is logged in)
+  const userId = user?.id;
+  useEffect(() => {
+    // Set when a newer fetch starts, so an older, slower response can't overwrite it
+    let isStale = false;
+
     async function fetchLists() {
       if (!user) {
         setLists([]);
@@ -261,6 +334,10 @@ export default function Home() {
       }
       setError(null);
 
+      // Let our own pending saves finish first, otherwise we'd load the old order
+      await saveQueue.current;
+      if (isStale) return;
+
       // Build query - when searching, fetch ALL lists (both boards, archived and non-archived)
       let query = supabase
         .from('lists')
@@ -276,6 +353,7 @@ export default function Home() {
       }
       
       const { data, error } = await query.order('position', { ascending: true });
+      if (isStale) return;
 
       if (error) {
         console.error('Error fetching lists:', error);
@@ -293,20 +371,7 @@ export default function Home() {
           setLists(sampleData);
         }
       } else {
-        // Preserve local width values to avoid race conditions with resize saves
-        // This ensures that if a user resizes a list and quickly switches boards,
-        // the local width is preserved even if the database save hasn't completed yet
-        setLists((currentLists) => {
-          const currentWidthMap = new Map(currentLists.map(l => [l.id, l.width]));
-          return (data || []).map(list => {
-            const localWidth = currentWidthMap.get(list.id);
-            // If we have a local width for this list, preserve it
-            if (localWidth !== undefined) {
-              return { ...list, width: localWidth };
-            }
-            return list;
-          });
-        });
+        setLists(data || []);
       }
       
       hasInitiallyLoaded.current = true;
@@ -316,12 +381,19 @@ export default function Home() {
     if (!authLoading) {
       fetchLists();
     }
-  }, [user, authLoading, viewMode, searchQuery]);
+
+    return () => {
+      isStale = true;
+    };
+    // Depends on the user's id rather than the user object: Supabase creates a new user
+    // object on every token refresh
+  }, [userId, authLoading, viewMode, searchQuery, refreshCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle drag start - track which item is being dragged
   function handleDragStart(event: DragStartEvent) {
     const { active } = event;
     const activeId = active.id as string;
+    dragSnapshot.current = lists;
     
     // Check if dragging a list
     if (activeId.startsWith('list-')) {
@@ -341,252 +413,154 @@ export default function Home() {
         setActiveCard(card);
         setActiveCardListWidth(list.width);
         setActiveList(null);
-        dragStartState.current = { cardId: card.id, sourceListId: list.id };
         break;
       }
     }
   }
 
-  // Handle drag over - move card between lists in real-time
+  // Handle drag over - move the card into another list while dragging, so it can be previewed there.
+  // Reordering within a list is previewed by @dnd-kit itself and applied in handleDragEnd.
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
-    
     if (!over) return;
-    
+
     const activeId = active.id as string;
     const overId = over.id as string;
-    
-    // If dragging a list, don't do anything in dragOver
     if (activeId.startsWith('list-')) return;
-    
-    // Card dragging logic
-    if (!activeCard) return;
 
-    // Find current list of the dragged card
-    let activeListContainer: ListType | undefined;
-    for (const list of lists) {
-      if ((list.cards || []).find((c) => c.id === activeId)) {
-        activeListContainer = list;
-        break;
-      }
-    }
-
-    if (!activeListContainer) return;
-
-    // Determine the target list
-    let overList: ListType | undefined;
-    let overCardId: string | null = null;
-
-    // Check if over.id is a list ID (for dropping on empty lists or list container)
-    overList = lists.find((l) => l.id === overId || `list-${l.id}` === overId);
-
-    if (!overList) {
-      // Check if over.id is a card ID
-      for (const list of lists) {
-        const card = (list.cards || []).find((c) => c.id === overId);
-        if (card) {
-          overList = list;
-          overCardId = card.id;
-          break;
-        }
-      }
-    }
-
-    if (!overList) return;
-
-    // If same list, let SortableContext handle it
-    if (activeListContainer.id === overList.id) {
-      // Reorder within same list
-      if (overCardId && activeId !== overCardId) {
-        setLists((prevLists) => {
-          return prevLists.map((list) => {
-            if (list.id !== activeListContainer!.id) return list;
-
-            const cards = [...(list.cards || [])].sort((a, b) => a.position - b.position);
-            const oldIndex = cards.findIndex((c) => c.id === activeId);
-            const newIndex = cards.findIndex((c) => c.id === overCardId);
-
-            if (oldIndex === -1 || newIndex === -1) return list;
-
-            const reorderedCards = arrayMove(cards, oldIndex, newIndex).map((card, index) => ({
-              ...card,
-              position: index,
-            }));
-
-            return { ...list, cards: reorderedCards };
-          });
-        });
-      }
-      return;
-    }
-
-    // Moving to a different list
     setLists((prevLists) => {
-      // Remove card from source list
-      const newLists = prevLists.map((list) => {
-        if (list.id === activeListContainer!.id) {
-          const filteredCards = (list.cards || [])
-            .filter((c) => c.id !== activeId)
-            .sort((a, b) => a.position - b.position)
-            .map((card, index) => ({ ...card, position: index }));
-          return { ...list, cards: filteredCards };
+      const fromListId = findListIdOfCard(prevLists, activeId);
+      const target = findDropTarget(prevLists, overId);
+      if (!fromListId || !target || target.listId === fromListId) return prevLists;
+
+      const movingCard = prevLists
+        .find((l) => l.id === fromListId)!
+        .cards!.find((c) => c.id === activeId)!;
+
+      return prevLists.map((list) => {
+        if (list.id === fromListId) {
+          return { ...list, cards: (list.cards || []).filter((c) => c.id !== activeId) };
         }
-        return list;
-      });
+        if (list.id !== target.listId) return list;
 
-      // Add card to destination list
-      return newLists.map((list) => {
-        if (list.id === overList!.id) {
-          const destCards = [...(list.cards || [])].sort((a, b) => a.position - b.position);
-          
-          // Find insert position
-          let insertIndex = destCards.length;
-          if (overCardId) {
-            const overIndex = destCards.findIndex((c) => c.id === overCardId);
-            if (overIndex !== -1) {
-              insertIndex = overIndex;
-            }
-          }
+        // Insert just above the card we're over, or at the bottom of the list
+        let destCards = sortByPosition(list.cards || []);
+        const overIndex = destCards.findIndex((c) => c.id === target.overCardId);
+        const insertIndex = overIndex === -1 ? destCards.length : overIndex;
 
-          // Create the moved card with updated list_id
-          const movedCard = { ...activeCard!, list_id: list.id };
-          
-          // Insert at position
-          destCards.splice(insertIndex, 0, movedCard);
-          
-          // Update positions
-          const updatedCards = destCards.map((card, index) => ({
-            ...card,
-            position: index,
-          }));
-
-          return { ...list, cards: updatedCards };
+        let previewPosition = positionBetween(
+          destCards[insertIndex - 1]?.position,
+          destCards[insertIndex]?.position
+        );
+        if (previewPosition === null) {
+          // Neighbours share a position; renumber this preview (the real save is worked out on drop)
+          destCards = destCards.map((card, index) => ({ ...card, position: index }));
+          previewPosition = insertIndex - 0.5;
         }
-        return list;
+
+        return {
+          ...list,
+          cards: [...destCards, { ...movingCard, list_id: list.id, position: previewPosition }],
+        };
       });
     });
   }
 
-  // Handle drag end event - save to Supabase
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    
-    const activeId = active.id as string;
-    
-    // Handle list reordering
-    if (activeId.startsWith('list-') && over) {
-      const overId = over.id as string;
-      
-      // Get the actual list IDs
-      const activeListId = activeId.replace('list-', '');
-      
-      // overId could be 'list-{id}' or just '{id}' (the droppable area)
-      let overListId = overId.startsWith('list-') ? overId.replace('list-', '') : overId;
-      
-      // Check if overListId is actually a list (not a card)
-      const isOverAList = lists.some((l) => l.id === overListId);
-      
-      if (!isOverAList) {
-        // Maybe we're over a card - find which list contains it
-        for (const list of lists) {
-          const card = (list.cards || []).find((c) => c.id === overId);
-          if (card) {
-            overListId = list.id;
-            break;
-          }
-        }
-      }
-      
-      if (activeListId !== overListId) {
-        const oldIndex = lists.findIndex((l) => l.id === activeListId);
-        const newIndex = lists.findIndex((l) => l.id === overListId);
-        
-        if (oldIndex !== -1 && newIndex !== -1) {
-          const reorderedLists = arrayMove(lists, oldIndex, newIndex).map((list, index) => ({
-            ...list,
-            position: index,
-          }));
-          
-          setLists(reorderedLists);
-          
-          // Save to Supabase (skip in dev bypass mode)
-          if (!isDevBypass) {
-            for (const list of reorderedLists) {
-              await supabase
-                .from('lists')
-                .update({ position: list.position })
-                .eq('id', list.id);
-            }
-          }
-        }
-      }
-      
-      setActiveList(null);
-      setActiveCard(null);
-      return;
+  // Handle drag being cancelled (Escape key, browser taking over the touch for scrolling, etc.)
+  function handleDragCancel() {
+    if (dragSnapshot.current) {
+      setLists(dragSnapshot.current);
     }
-    
-    // Handle card dragging
+    dragSnapshot.current = null;
     setActiveCard(null);
     setActiveList(null);
-    
-    if (!dragStartState.current) return;
+  }
 
-    // Find the card's current list (after all the drag over updates)
-    let currentList: ListType | undefined;
-    let currentCard: CardType | undefined;
+  // Handle drag end event - save to Supabase
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    const activeId = active.id as string;
+    const snapshot = dragSnapshot.current;
 
-    for (const list of lists) {
-      const card = (list.cards || []).find((c) => c.id === activeId);
-      if (card) {
-        currentList = list;
-        currentCard = card;
-        break;
-      }
+    dragSnapshot.current = null;
+    setActiveCard(null);
+    setActiveList(null);
+
+    if (!snapshot) return;
+
+    if (activeId.startsWith('list-')) {
+      handleListDrop(activeId.replace('list-', ''), over ? (over.id as string) : null);
+    } else {
+      handleCardDrop(activeId, over ? (over.id as string) : null, snapshot);
     }
+  }
 
-    if (!currentList || !currentCard) {
-      dragStartState.current = null;
+  // Save a list's new place on the board
+  function handleListDrop(activeListId: string, overId: string | null) {
+    if (!overId) return;
+
+    const target = findDropTarget(lists, overId);
+    if (!target || target.listId === activeListId) return;
+
+    const oldIndex = lists.findIndex((l) => l.id === activeListId);
+    const newIndex = lists.findIndex((l) => l.id === target.listId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reorderedLists = arrayMove(lists, oldIndex, newIndex);
+    const updates = repositionAfterMove(reorderedLists, activeListId);
+    setLists(applyPositionUpdates(reorderedLists, updates));
+
+    if (!isDevBypass) {
+      enqueueSave('the new list order', () => savePositions('lists', updates));
+    }
+  }
+
+  // Save a card's new place. `lists` already has the card in its new list (from handleDragOver);
+  // `snapshot` is the board from before the drag, i.e. what's in the database.
+  function handleCardDrop(activeId: string, overId: string | null, snapshot: ListType[]) {
+    const sourceListId = findListIdOfCard(snapshot, activeId);
+    const finalListId = findListIdOfCard(lists, activeId);
+    if (!sourceListId || !finalListId) {
+      setLists(snapshot);
       return;
     }
 
-    // Save to Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { sourceListId } = dragStartState.current;
-      
-      // Update the card's list_id and position
-      await supabase
-        .from('cards')
-        .update({ 
-          list_id: currentList.id, 
-          position: currentCard.position 
-        })
-        .eq('id', activeId);
-
-      // Update positions in current list
-      const currentListCards = (currentList.cards || []).filter((c) => c.id !== activeId);
-      for (const card of currentListCards) {
-        await supabase
-          .from('cards')
-          .update({ position: card.position })
-          .eq('id', card.id);
-      }
-
-      // If moved to different list, update source list positions too
-      if (sourceListId !== currentList.id) {
-        const sourceList = lists.find((l) => l.id === sourceListId);
-        if (sourceList) {
-          for (const card of sourceList.cards || []) {
-            await supabase
-              .from('cards')
-              .update({ position: card.position })
-              .eq('id', card.id);
-          }
-        }
-      }
+    // Final order of the card's list, including a reorder within the list on drop
+    let finalOrder = sortByPosition(lists.find((l) => l.id === finalListId)!.cards || []).map((c) => c.id);
+    const fromIndex = finalOrder.indexOf(activeId);
+    const toIndex = overId ? finalOrder.indexOf(overId) : -1;
+    if (toIndex !== -1 && toIndex !== fromIndex) {
+      finalOrder = arrayMove(finalOrder, fromIndex, toIndex);
     }
 
-    dragStartState.current = null;
+    // Nothing changed
+    const originalOrder = sortByPosition(snapshot.find((l) => l.id === sourceListId)!.cards || []).map((c) => c.id);
+    if (sourceListId === finalListId && finalOrder.join() === originalOrder.join()) {
+      setLists(snapshot);
+      return;
+    }
+
+    // Work out positions from the database values (the snapshot), not the drag preview
+    const snapshotCards = new Map(snapshot.flatMap((l) => l.cards || []).map((c) => [c.id, c]));
+    const ordered = finalOrder.map((id) => snapshotCards.get(id)).filter((c): c is CardType => !!c);
+    const updates = repositionAfterMove(ordered, activeId);
+    const movedCard = { ...snapshotCards.get(activeId)!, list_id: finalListId };
+
+    setLists(
+      snapshot.map((list) => {
+        if (list.id !== sourceListId && list.id !== finalListId) return list;
+
+        let cards = (list.cards || []).filter((c) => c.id !== activeId);
+        if (list.id === finalListId) cards = [...cards, movedCard];
+        return { ...list, cards: applyPositionUpdates(cards, updates) };
+      })
+    );
+
+    if (!isDevBypass) {
+      enqueueSave('the card move', () =>
+        savePositions('cards', updates, { [activeId]: { list_id: finalListId } })
+      );
+    }
   }
 
   // Create a new list
@@ -597,7 +571,7 @@ export default function Home() {
     }
 
     // Calculate position for new list (at the end)
-    const newPosition = lists.length;
+    const newPosition = nextPosition(lists);
 
     // In dev bypass mode, create with a mock ID (no database)
     if (isDevBypass) {
@@ -614,7 +588,7 @@ export default function Home() {
         created_at: new Date().toISOString(),
         cards: [],
       };
-      setLists([...lists, mockList]);
+      setLists((prevLists) => [...prevLists, mockList]);
       setNewListTitle('');
       setIsAddingList(false);
       return;
@@ -643,7 +617,7 @@ export default function Home() {
 
     // Add new list to state (updates UI immediately)
     if (data) {
-      setLists([...lists, { ...data, cards: [] }]);
+      setLists((prevLists) => [...prevLists, { ...data, cards: [] }]);
     }
 
     // Reset the form
@@ -669,7 +643,7 @@ export default function Home() {
     if (!list || !user) return;
 
     // Calculate position for new card (at the end)
-    const newPosition = (list.cards || []).length;
+    const newPosition = nextPosition(list.cards || []);
 
     // In dev bypass mode, create with a mock ID (no database)
     if (isDevBypass) {
@@ -683,8 +657,8 @@ export default function Home() {
         completed: false,
         created_at: new Date().toISOString(),
       };
-      setLists(
-        lists.map((l) =>
+      setLists((prevLists) =>
+        prevLists.map((l) =>
           l.id === listId
             ? { ...l, cards: [...(l.cards || []), mockCard] }
             : l
@@ -714,8 +688,8 @@ export default function Home() {
 
     // Update state to show new card immediately
     if (data) {
-      setLists(
-        lists.map((l) =>
+      setLists((prevLists) =>
+        prevLists.map((l) =>
           l.id === listId
             ? { ...l, cards: [...(l.cards || []), data] }
             : l
@@ -864,22 +838,14 @@ export default function Home() {
   }
 
   // Handle list resize end (save to database - called once on mouse up)
-  async function handleResizeListEnd(listId: string, newWidth: number) {
+  function handleResizeListEnd(listId: string, newWidth: number) {
     // Skip database save in dev bypass mode
     if (isDevBypass) return;
 
     // The width column is an INTEGER, so round to avoid save failures
     const width = Math.round(newWidth);
 
-    // Save to Supabase
-    const { error } = await supabase
-      .from('lists')
-      .update({ width })
-      .eq('id', listId);
-
-    if (error) {
-      console.error('Error updating list width:', error);
-    }
+    enqueueSave('the list width', () => supabase.from('lists').update({ width }).eq('id', listId));
   }
 
   // Handle opening card details modal
@@ -1209,6 +1175,7 @@ export default function Home() {
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
         >
           <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
             <div className="flex gap-3 items-start pr-8 h-full">
@@ -1347,6 +1314,29 @@ export default function Home() {
           }
         }}
       />
+
+      {/* Save error banner */}
+      {saveError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-red-600 text-white text-sm px-4 py-2 rounded-md shadow-lg">
+          <span>{saveError}</span>
+          <button
+            onClick={() => {
+              setSaveError(null);
+              setRefreshCount((count) => count + 1);
+            }}
+            className="font-medium underline hover:no-underline"
+          >
+            Reload board
+          </button>
+          <button
+            onClick={() => setSaveError(null)}
+            className="text-white/80 hover:text-white"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }
