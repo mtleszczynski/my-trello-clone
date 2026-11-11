@@ -45,6 +45,12 @@ export default function Home() {
   
   // State for search
   const [searchQuery, setSearchQuery] = useState('');
+  // The search the board actually shows: follows the input once typing pauses
+  const [activeSearch, setActiveSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setActiveSearch(searchQuery), searchQuery ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   
   // State for adding a new list
   const [isAddingList, setIsAddingList] = useState(false);
@@ -114,14 +120,19 @@ export default function Home() {
   };
 
   // Queue a database write. Failures are shown to the user instead of silently ignored.
+  // Resolves to whether the save worked.
   function enqueueSave(what: string, save: () => PromiseLike<{ error: { message: string } | null }>) {
-    saveQueue.current = saveQueue.current.then(async () => {
+    const result = saveQueue.current.then(async () => {
       const { error } = await save();
       if (error) {
-        console.error(`Error saving ${what}:`, error);
-        setSaveError(`Couldn't save ${what}.`);
+        console.error(`Error ${what}:`, error);
+        setSaveError(`Something went wrong ${what}. It wasn't saved.`);
+        return false;
       }
+      return true;
     });
+    saveQueue.current = result.then(() => undefined);
+    return result;
   }
 
   // Save several position updates in one go and report the first error, if any
@@ -236,6 +247,20 @@ export default function Home() {
     return finalData;
   }
 
+  // Number of lists the user has across both boards and archives (null if the check failed)
+  async function countAllLists(userId: string): Promise<number | null> {
+    const { count, error } = await supabase
+      .from('lists')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error counting lists:', error);
+      return null;
+    }
+    return count;
+  }
+
   // Track if this is the initial load
   const hasInitiallyLoaded = useRef(false);
 
@@ -345,7 +370,7 @@ export default function Home() {
         .eq('user_id', user.id);
       
       // Only filter by board and archived status when NOT searching
-      if (!searchQuery.trim()) {
+      if (!activeSearch.trim()) {
         // Include lists that match the current board OR are shared
         query = query
           .or(`board.eq.${getCurrentBoard()},shared.eq.true`)
@@ -362,8 +387,16 @@ export default function Home() {
         return;
       }
 
-      // If user has no lists on Work board, create sample data (only once)
-      if (!searchQuery.trim() && viewMode === 'work' && data && data.length === 0 && !isCreatingSampleData.current) {
+      // Brand-new user (no lists anywhere, including the other board and archives): create sample data
+      const isNewUser =
+        !activeSearch.trim() &&
+        viewMode === 'work' &&
+        (data || []).length === 0 &&
+        !isCreatingSampleData.current &&
+        (await countAllLists(user.id)) === 0;
+      if (isStale) return;
+
+      if (isNewUser) {
         isCreatingSampleData.current = true;
         const sampleData = await createSampleData(user.id);
         isCreatingSampleData.current = false;
@@ -387,7 +420,7 @@ export default function Home() {
     };
     // Depends on the user's id rather than the user object: Supabase creates a new user
     // object on every token refresh
-  }, [userId, authLoading, viewMode, searchQuery, refreshCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, authLoading, viewMode, activeSearch, refreshCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle drag start - track which item is being dragged
   function handleDragStart(event: DragStartEvent) {
@@ -511,7 +544,7 @@ export default function Home() {
     setLists(applyPositionUpdates(reorderedLists, updates));
 
     if (!isDevBypass) {
-      enqueueSave('the new list order', () => savePositions('lists', updates));
+      enqueueSave('reordering the lists', () => savePositions('lists', updates));
     }
   }
 
@@ -557,7 +590,7 @@ export default function Home() {
     );
 
     if (!isDevBypass) {
-      enqueueSave('the card move', () =>
+      enqueueSave('moving the card', () =>
         savePositions('cards', updates, { [activeId]: { list_id: finalListId } })
       );
     }
@@ -612,6 +645,7 @@ export default function Home() {
 
     if (error) {
       console.error('Error creating list:', error);
+      setSaveError("Couldn't add the list.");
       return;
     }
 
@@ -683,6 +717,7 @@ export default function Home() {
 
     if (error) {
       console.error('Error creating card:', error);
+      setSaveError("Couldn't add the card.");
       return;
     }
 
@@ -698,159 +733,89 @@ export default function Home() {
     }
   }
 
+  // Save changed fields of a card or list (skipped in dev bypass mode)
+  function saveChanges(table: 'cards' | 'lists', id: string, changes: Partial<CardType> | Partial<ListType>, what: string) {
+    if (isDevBypass) return Promise.resolve(true);
+    return enqueueSave(what, () => supabase.from(table).update(changes).eq('id', id));
+  }
+
+  // Change a card: update the screen right away, then save
+  function updateCard(cardId: string, changes: Partial<CardType>, what: string) {
+    setLists((prevLists) =>
+      prevLists.map((list) => ({
+        ...list,
+        cards: (list.cards || []).map((card) => (card.id === cardId ? { ...card, ...changes } : card)),
+      }))
+    );
+    return saveChanges('cards', cardId, changes, what);
+  }
+
+  // Change a list that stays on this board
+  function updateList(listId: string, changes: Partial<ListType>, what: string) {
+    setLists((prevLists) => prevLists.map((l) => (l.id === listId ? { ...l, ...changes } : l)));
+    return saveChanges('lists', listId, changes, what);
+  }
+
+  // Change a list in a way that takes it off this board (archive, unarchive, move to other board)
+  function removeListFromView(listId: string, changes: Partial<ListType>, what: string) {
+    setLists((prevLists) => prevLists.filter((l) => l.id !== listId));
+    return saveChanges('lists', listId, changes, what);
+  }
+
   // Delete a card
-  async function handleDeleteCard(cardId: string, listId: string) {
-    // Update UI immediately (optimistic update)
-    setLists(
-      lists.map((l) =>
-        l.id === listId
-          ? { ...l, cards: (l.cards || []).filter((c) => c.id !== cardId) }
-          : l
+  function handleDeleteCard(cardId: string, listId: string) {
+    setLists((prevLists) =>
+      prevLists.map((l) =>
+        l.id === listId ? { ...l, cards: (l.cards || []).filter((c) => c.id !== cardId) } : l
       )
     );
 
-    // Delete from Supabase (skip in dev bypass mode)
     if (!isDevBypass) {
-      const { error } = await supabase.from('cards').delete().eq('id', cardId);
-
-      if (error) {
-        console.error('Error deleting card:', error);
-      }
+      enqueueSave('deleting the card', () => supabase.from('cards').delete().eq('id', cardId));
     }
   }
 
-  // Archive a list (move to archive)
-  async function handleArchiveList(listId: string) {
-    // Update UI immediately (optimistic update)
-    setLists(lists.filter((l) => l.id !== listId));
-
-    // Update in Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { error } = await supabase
-        .from('lists')
-        .update({ archived: true })
-        .eq('id', listId);
-
-      if (error) {
-        console.error('Error archiving list:', error);
-      }
-    }
+  function handleArchiveList(listId: string) {
+    removeListFromView(listId, { archived: true }, 'archiving the list');
   }
 
-  // Unarchive a list (move back to main board)
-  async function handleUnarchiveList(listId: string) {
-    // Update UI immediately (optimistic update)
-    setLists(lists.filter((l) => l.id !== listId));
-
-    // Update in Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { error } = await supabase
-        .from('lists')
-        .update({ archived: false })
-        .eq('id', listId);
-
-      if (error) {
-        console.error('Error unarchiving list:', error);
-      }
-    }
+  function handleUnarchiveList(listId: string) {
+    removeListFromView(listId, { archived: false }, 'unarchiving the list');
   }
 
-  // Toggle shared status of a list
-  async function handleToggleShared(listId: string) {
-    // Find the list and toggle its shared state
-    const list = lists.find((l) => l.id === listId);
-    if (!list) return;
-    
-    const newSharedState = !list.shared;
-    
-    // Update UI immediately (optimistic update)
-    setLists(
-      lists.map((l) => (l.id === listId ? { ...l, shared: newSharedState } : l))
-    );
-
-    // Save to Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { error } = await supabase
-        .from('lists')
-        .update({ shared: newSharedState })
-        .eq('id', listId);
-
-      if (error) {
-        console.error('Error toggling shared status:', error);
-      }
-    }
-  }
-
-  // Move a list to another board
-  async function handleMoveList(listId: string, targetBoard: BoardType) {
-    // Find the list
+  function handleMoveList(listId: string, targetBoard: BoardType) {
     const list = lists.find((l) => l.id === listId);
     if (!list || list.board === targetBoard) return;
-    
-    // Update UI immediately (optimistic update) - remove from current view
-    setLists(lists.filter((l) => l.id !== listId));
-
-    // Save to Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { error } = await supabase
-        .from('lists')
-        .update({ board: targetBoard })
-        .eq('id', listId);
-
-      if (error) {
-        console.error('Error moving list:', error);
-      }
-    }
+    removeListFromView(listId, { board: targetBoard }, 'moving the list to another board');
   }
 
-  // Handle toggling minimized state of a list
-  async function handleToggleMinimized(listId: string) {
-    // Find the list and toggle its minimized state
+  function handleToggleShared(listId: string) {
     const list = lists.find((l) => l.id === listId);
-    if (!list) return;
-    
-    const newMinimizedState = !list.minimized;
-    
-    // Update UI immediately (optimistic update)
-    setLists(
-      lists.map((l) => (l.id === listId ? { ...l, minimized: newMinimizedState } : l))
-    );
+    if (list) updateList(listId, { shared: !list.shared }, 'sharing the list');
+  }
 
-    // Save to Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { error } = await supabase
-        .from('lists')
-        .update({ minimized: newMinimizedState })
-        .eq('id', listId);
+  function handleToggleMinimized(listId: string) {
+    const list = lists.find((l) => l.id === listId);
+    if (list) updateList(listId, { minimized: !list.minimized }, 'minimizing the list');
+  }
 
-      if (error) {
-        console.error('Error toggling minimized state:', error);
-      }
-    }
+  function handleRenameList(listId: string, newTitle: string) {
+    updateList(listId, { title: newTitle }, 'renaming the list');
   }
 
   // Handle list resize (UI update only - called on every mouse move)
   function handleResizeList(listId: string, newWidth: number) {
-    // Update UI immediately (optimistic update)
-    setLists(
-      lists.map((l) => (l.id === listId ? { ...l, width: newWidth } : l))
-    );
+    setLists((prevLists) => prevLists.map((l) => (l.id === listId ? { ...l, width: newWidth } : l)));
   }
 
   // Handle list resize end (save to database - called once on mouse up)
   function handleResizeListEnd(listId: string, newWidth: number) {
-    // Skip database save in dev bypass mode
-    if (isDevBypass) return;
-
     // The width column is an INTEGER, so round to avoid save failures
-    const width = Math.round(newWidth);
-
-    enqueueSave('the list width', () => supabase.from('lists').update({ width }).eq('id', listId));
+    saveChanges('lists', listId, { width: Math.round(newWidth) }, 'resizing the list');
   }
 
   // Handle opening card details modal
   function handleCardClick(cardId: string) {
-    // Find the card in the lists
     for (const list of lists) {
       const card = (list.cards || []).find((c) => c.id === cardId);
       if (card) {
@@ -860,85 +825,14 @@ export default function Home() {
     }
   }
 
-  // Handle saving card details
-  async function handleSaveCard(cardId: string, title: string, description: string) {
-    // Update UI immediately (optimistic update)
-    setLists(
-      lists.map((list) => ({
-        ...list,
-        cards: (list.cards || []).map((card) =>
-          card.id === cardId
-            ? { ...card, title, description }
-            : card
-        ),
-      }))
-    );
-
-    // Save to Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { error } = await supabase
-        .from('cards')
-        .update({ title, description })
-        .eq('id', cardId);
-
-      if (error) {
-        console.error('Error updating card:', error);
-      }
-    }
+  // Handle saving card details (resolves to whether the save worked)
+  function handleSaveCard(cardId: string, title: string, description: string) {
+    return updateCard(cardId, { title, description }, 'saving the card details');
   }
 
-  // Handle toggling card completion
-  async function handleToggleComplete(cardId: string) {
-    // Find the card and toggle its completed state
-    let newCompletedState = false;
-    
-    // Update UI immediately (optimistic update)
-    setLists(
-      lists.map((list) => ({
-        ...list,
-        cards: (list.cards || []).map((card) => {
-          if (card.id === cardId) {
-            newCompletedState = !card.completed;
-            return { ...card, completed: newCompletedState };
-          }
-          return card;
-        }),
-      }))
-    );
-
-    // Save to Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { error } = await supabase
-        .from('cards')
-        .update({ completed: newCompletedState })
-        .eq('id', cardId);
-
-      if (error) {
-        console.error('Error updating card completion:', error);
-      }
-    }
-  }
-
-  // Handle renaming a list
-  async function handleRenameList(listId: string, newTitle: string) {
-    // Update UI immediately (optimistic update)
-    setLists(
-      lists.map((list) =>
-        list.id === listId ? { ...list, title: newTitle } : list
-      )
-    );
-
-    // Save to Supabase (skip in dev bypass mode)
-    if (!isDevBypass) {
-      const { error } = await supabase
-        .from('lists')
-        .update({ title: newTitle })
-        .eq('id', listId);
-
-      if (error) {
-        console.error('Error renaming list:', error);
-      }
-    }
+  function handleToggleComplete(cardId: string) {
+    const card = lists.flatMap((l) => l.cards || []).find((c) => c.id === cardId);
+    if (card) updateCard(cardId, { completed: !card.completed }, 'ticking off the card');
   }
 
   // Drag-to-scroll handlers for the board
@@ -1188,7 +1082,7 @@ export default function Home() {
                   onDeleteCard={handleDeleteCard}
                   onArchiveList={
                     // When searching, use list's actual archived status; otherwise use isArchiveView
-                    searchQuery.trim()
+                    activeSearch.trim()
                       ? (list.archived ? handleUnarchiveList : handleArchiveList)
                       : (isArchiveView ? handleUnarchiveList : handleArchiveList)
                   }
@@ -1200,8 +1094,8 @@ export default function Home() {
                   onToggleMinimized={handleToggleMinimized}
                   onCardClick={handleCardClick}
                   onToggleComplete={handleToggleComplete}
-                  isArchiveView={searchQuery.trim() ? list.archived : isArchiveView}
-                  searchQuery={searchQuery}
+                  isArchiveView={activeSearch.trim() ? list.archived : isArchiveView}
+                  searchQuery={activeSearch}
                 />
               ))}
 
@@ -1300,20 +1194,18 @@ export default function Home() {
       </main>
 
       {/* Card Details Modal */}
-      <CardDetailsModal
-        card={selectedCard}
-        onClose={() => setSelectedCard(null)}
-        onSave={handleSaveCard}
-        onDelete={(cardId) => {
-          // Find the list containing the card
-          for (const list of lists) {
-            if ((list.cards || []).find((c) => c.id === cardId)) {
-              handleDeleteCard(cardId, list.id);
-              break;
-            }
-          }
-        }}
-      />
+      {selectedCard && (
+        <CardDetailsModal
+          key={selectedCard.id}
+          card={selectedCard}
+          onClose={() => setSelectedCard(null)}
+          onSave={handleSaveCard}
+          onDelete={(cardId) => {
+            const listId = findListIdOfCard(lists, cardId);
+            if (listId) handleDeleteCard(cardId, listId);
+          }}
+        />
+      )}
 
       {/* Save error banner */}
       {saveError && (

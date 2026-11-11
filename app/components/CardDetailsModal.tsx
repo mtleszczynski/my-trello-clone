@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card as CardType } from '../types';
 
-type SaveStatus = 'saved' | 'saving' | 'unsaved';
+type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'failed';
 
+// Render with key={card.id} so the form starts fresh for each card
 interface CardDetailsModalProps {
-  card: CardType | null;
+  card: CardType;
   onClose: () => void;
-  onSave: (cardId: string, title: string, description: string) => void;
+  onSave: (cardId: string, title: string, description: string) => Promise<boolean>;
   onDelete: (cardId: string) => void;
 }
 
@@ -55,6 +56,16 @@ function getSavedSize(): { width: number; height: number } | null {
   return null;
 }
 
+// Starting size: the saved size, made taller if the description needs more room
+function getInitialSize(description: string): { width: number; height: number } {
+  const autoHeight = calculateInitialHeight(description);
+  const savedSize = getSavedSize();
+  if (savedSize) {
+    return { width: savedSize.width, height: Math.max(savedSize.height, autoHeight) };
+  }
+  return { width: DEFAULT_WIDTH, height: autoHeight };
+}
+
 // Save size to localStorage
 function saveSize(size: { width: number; height: number }) {
   if (typeof window === 'undefined') return;
@@ -66,17 +77,18 @@ function saveSize(size: { width: number; height: number }) {
 }
 
 export default function CardDetailsModal({ card, onClose, onSave, onDelete }: CardDetailsModalProps) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState(card.title);
+  const [description, setDescription] = useState(card.description || '');
   
   // Auto-save state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedIndicatorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedValues = useRef<{ title: string; description: string }>({ title: '', description: '' });
+  const lastSavedValues = useRef({ title: card.title, description: card.description || '' });
+  // Counts edits, so a save that finishes late doesn't show "Saved" over newer, unsaved typing
+  const editCount = useRef(0);
 
   // Resize state
-  const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
+  const [size, setSize] = useState(() => getInitialSize(card.description || ''));
   const [isResizing, setIsResizing] = useState(false);
   const justFinishedResizing = useRef(false);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -93,18 +105,16 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
     }
     
     setSaveStatus('saving');
-    onSave(cardId, trimmedTitle, trimmedDesc);
-    lastSavedValues.current = { title: trimmedTitle, description: trimmedDesc };
-    
-    // Show "Saved" after a brief moment
-    if (savedIndicatorTimer.current) clearTimeout(savedIndicatorTimer.current);
-    savedIndicatorTimer.current = setTimeout(() => {
-      setSaveStatus('saved');
-    }, 500);
+    const editsAtSave = editCount.current;
+    onSave(cardId, trimmedTitle, trimmedDesc).then((ok) => {
+      if (ok) lastSavedValues.current = { title: trimmedTitle, description: trimmedDesc };
+      if (editCount.current === editsAtSave) setSaveStatus(ok ? 'saved' : 'failed');
+    });
   }, [onSave]);
 
   // Schedule a debounced save (1 second after user stops typing)
   const scheduleSave = useCallback((cardId: string, newTitle: string, newDescription: string) => {
+    editCount.current += 1;
     setSaveStatus('unsaved');
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
@@ -112,66 +122,31 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
     }, 1000);
   }, [doSave]);
 
-  // Flush any pending save immediately (used when closing)
+  // Save any unsaved changes immediately (used when closing; skipped if nothing changed)
   const flushSave = useCallback(() => {
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
       debounceTimer.current = null;
     }
-    if (card && saveStatus === 'unsaved') {
-      doSave(card.id, title, description);
-    }
-  }, [card, title, description, saveStatus, doSave]);
+    doSave(card.id, title, description);
+  }, [card.id, title, description, doSave]);
 
   // Handle title change with auto-save
   function handleTitleChange(newTitle: string) {
     setTitle(newTitle);
-    if (card) scheduleSave(card.id, newTitle, description);
+    scheduleSave(card.id, newTitle, description);
   }
 
   // Handle description change with auto-save
   function handleDescriptionChange(newDescription: string) {
     setDescription(newDescription);
-    if (card) scheduleSave(card.id, title, newDescription);
+    scheduleSave(card.id, title, newDescription);
   }
 
-  // Update form when a DIFFERENT card is opened (not when same card's data updates from parent)
-  useEffect(() => {
-    if (card) {
-      setTitle(card.title);
-      setDescription(card.description || '');
-      lastSavedValues.current = { title: card.title, description: card.description || '' };
-      setSaveStatus('saved');
-    }
-  }, [card?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Set initial size when modal opens
-  useEffect(() => {
-    if (card) {
-      // First check for saved size
-      const savedSize = getSavedSize();
-      if (savedSize) {
-        // Use saved size, but expand height if description needs more space
-        const autoHeight = calculateInitialHeight(card.description || '');
-        setSize({
-          width: savedSize.width,
-          height: Math.max(savedSize.height, autoHeight),
-        });
-      } else {
-        // No saved size - calculate based on description
-        setSize({
-          width: DEFAULT_WIDTH,
-          height: calculateInitialHeight(card.description || ''),
-        });
-      }
-    }
-  }, [card?.id, card?.description]);
-
-  // Cleanup timers on unmount
+  // Cleanup timer on unmount
   useEffect(() => {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
-      if (savedIndicatorTimer.current) clearTimeout(savedIndicatorTimer.current);
     };
   }, []);
 
@@ -183,7 +158,6 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
 
   // Handle deleting
   function handleDelete() {
-    if (!card) return;
     if (window.confirm(`Delete "${card.title}"?`)) {
       // Cancel any pending save since the card is being deleted
       if (debounceTimer.current) {
@@ -265,9 +239,6 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
     };
   }, [isResizing, size]);
 
-  // Don't render if no card
-  if (!card) return null;
-
   return (
     <div
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 pt-12 sm:p-4 overflow-hidden"
@@ -288,6 +259,7 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
             <span className={`text-xs transition-opacity duration-300 ${
               saveStatus === 'saved' ? 'text-emerald-500' :
               saveStatus === 'saving' ? 'text-blue-500' :
+              saveStatus === 'failed' ? 'text-red-500' :
               'text-amber-500'
             }`}>
               {saveStatus === 'saved' && (
@@ -300,6 +272,7 @@ export default function CardDetailsModal({ card, onClose, onSave, onDelete }: Ca
               )}
               {saveStatus === 'saving' && 'Saving...'}
               {saveStatus === 'unsaved' && 'Editing...'}
+              {saveStatus === 'failed' && 'Not saved'}
             </span>
           </div>
           <button
