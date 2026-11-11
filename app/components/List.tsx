@@ -3,29 +3,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { List as ListType, BoardType } from '../types';
+import { List as ListType, ListActions } from '../types';
 import SortableCard from './SortableCard';
 import { highlightText } from '../lib/highlightText';
 
 interface ListProps {
   list: ListType;
-  onCreateCard: (listId: string, title: string) => void;
-  onDeleteCard: (cardId: string, listId: string) => void;
-  onArchiveList: (listId: string) => void;
-  onMoveList?: (listId: string, targetBoard: BoardType) => void;
-  onResize: (listId: string, newWidth: number) => void;
-  onResizeEnd?: (listId: string, newWidth: number) => void;
-  onRenameList: (listId: string, newTitle: string) => void;
-  onToggleShared?: (listId: string) => void;
-  onToggleMinimized?: (listId: string) => void;
-  onCardClick?: (cardId: string) => void;
-  onToggleComplete?: (cardId: string) => void;
-  isArchiveView?: boolean;
+  actions: ListActions;
   searchQuery?: string;
   dragHandleProps?: Record<string, unknown>;
 }
 
-export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, onMoveList, onResize, onResizeEnd, onRenameList, onToggleShared, onToggleMinimized, onCardClick, onToggleComplete, isArchiveView = false, searchQuery = '', dragHandleProps }: ListProps) {
+export default function List({ list, actions, searchQuery = '', dragHandleProps }: ListProps) {
   // State for adding a new card
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -58,7 +47,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
   function handleCreateCard() {
     if (!newCardTitle.trim()) return;
     
-    onCreateCard(list.id, newCardTitle.trim());
+    actions.createCard(list.id, newCardTitle.trim());
     setNewCardTitle('');
     setIsAddingCard(false);
   }
@@ -77,13 +66,13 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
   // Handle archiving/unarchiving the list (with confirmation)
   function handleArchiveList() {
     const cardCount = (list.cards || []).length;
-    const action = isArchiveView ? 'Unarchive' : 'Archive';
+    const action = list.archived ? 'Unarchive' : 'Archive';
     const message = cardCount > 0
       ? `${action} "${list.title}" and its ${cardCount} card${cardCount > 1 ? 's' : ''}?`
       : `${action} "${list.title}"?`;
     
     if (window.confirm(message)) {
-      onArchiveList(list.id);
+      actions.setArchived(list.id, !list.archived);
     }
   }
 
@@ -99,7 +88,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
   function handleSaveTitle() {
     const trimmedTitle = editedTitle.trim();
     if (trimmedTitle && trimmedTitle !== list.title) {
-      onRenameList(list.id, trimmedTitle);
+      actions.renameList(list.id, trimmedTitle);
     }
     setIsEditingTitle(false);
   }
@@ -159,7 +148,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
       currentWidthRef.current = constrainedWidth;
       
       // Update width immediately (optimistic update)
-      onResize(list.id, constrainedWidth);
+      actions.resizeList(list.id, constrainedWidth);
     }
 
     function handleMouseMove(e: MouseEvent) {
@@ -175,7 +164,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
     function handleEnd() {
       setIsResizing(false);
       // Save the final width to database
-      onResizeEnd?.(list.id, currentWidthRef.current);
+      actions.resizeListEnd(list.id, currentWidthRef.current);
     }
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -193,7 +182,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
       document.removeEventListener('touchend', handleEnd);
       document.body.style.userSelect = '';
     };
-  }, [isResizing, list.id, onResize, onResizeEnd]);
+  }, [isResizing, list.id, actions]);
 
   // Close move dropdown when clicking outside
   useEffect(() => {
@@ -237,7 +226,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
           </div>
           {/* Expand button */}
           <button
-            onClick={() => onToggleMinimized?.(list.id)}
+            onClick={() => actions.toggleMinimized(list.id)}
             className="text-slate-400 hover:text-blue-500 transition-colors p-0.5"
             title="Expand list"
           >
@@ -367,9 +356,9 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
         )}
         
         {/* Share Toggle - only show when not in archive view */}
-        {!isArchiveView && onToggleShared && (
+        {!list.archived && (
           <button
-            onClick={() => onToggleShared(list.id)}
+            onClick={() => actions.toggleShared(list.id)}
             className={`transition-colors p-0.5 ${
               list.shared
                 ? 'text-blue-500 hover:text-blue-600'
@@ -385,9 +374,9 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
         )}
         
         {/* Minimize Button */}
-        {!isArchiveView && onToggleMinimized && (
+        {!list.archived && (
           <button
-            onClick={() => onToggleMinimized(list.id)}
+            onClick={() => actions.toggleMinimized(list.id)}
             className="text-slate-400 hover:text-blue-500 transition-colors p-0.5"
             title="Minimize list"
           >
@@ -425,9 +414,9 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
               <SortableCard
                 key={card.id}
                 card={card}
-                onDelete={() => onDeleteCard(card.id, list.id)}
-                onClick={() => onCardClick?.(card.id)}
-                onToggleComplete={() => onToggleComplete?.(card.id)}
+                onDelete={() => actions.deleteCard(card.id, list.id)}
+                onClick={() => actions.openCard(card.id)}
+                onToggleComplete={() => actions.toggleComplete(card.id)}
                 searchQuery={searchQuery}
               />
             ))
@@ -485,7 +474,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
             </button>
             <div className="flex items-center gap-0.5">
               {/* Move to board button - only show when not in archive view */}
-              {!isArchiveView && onMoveList && (
+              {!list.archived && (
                 <div className="relative" ref={moveDropdownRef}>
                   <button
                     onClick={() => setShowMoveDropdown(!showMoveDropdown)}
@@ -502,7 +491,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
                       <div className="px-2 py-1 text-[10px] font-medium text-slate-400 uppercase">Move to</div>
                       <button
                         onClick={() => {
-                          onMoveList(list.id, 'work');
+                          actions.moveList(list.id, 'work');
                           setShowMoveDropdown(false);
                         }}
                         disabled={list.board === 'work'}
@@ -516,7 +505,7 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
                       </button>
                       <button
                         onClick={() => {
-                          onMoveList(list.id, 'personal');
+                          actions.moveList(list.id, 'personal');
                           setShowMoveDropdown(false);
                         }}
                         disabled={list.board === 'personal'}
@@ -537,13 +526,13 @@ export default function List({ list, onCreateCard, onDeleteCard, onArchiveList, 
               <button
                 onClick={handleArchiveList}
                 className={`transition-colors p-1.5 ${
-                  isArchiveView 
+                  list.archived 
                     ? 'text-slate-400 hover:text-emerald-500' 
                     : 'text-slate-400 hover:text-amber-500'
                 }`}
-                title={isArchiveView ? 'Unarchive list' : 'Archive list'}
+                title={list.archived ? 'Unarchive list' : 'Archive list'}
               >
-                {isArchiveView ? (
+                {list.archived ? (
                   // Unarchive icon (arrow coming out of box)
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="17 11 12 6 7 11"></polyline>

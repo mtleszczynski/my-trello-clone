@@ -2,42 +2,16 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { List as ListType, BoardType } from '../types';
+import { List as ListType, ListActions } from '../types';
 import List from './List';
 
 interface SortableListProps {
   list: ListType;
-  onCreateCard: (listId: string, title: string) => void;
-  onDeleteCard: (cardId: string, listId: string) => void;
-  onArchiveList: (listId: string) => void;
-  onMoveList?: (listId: string, targetBoard: BoardType) => void;
-  onResize: (listId: string, newWidth: number) => void;
-  onResizeEnd?: (listId: string, newWidth: number) => void;
-  onRenameList: (listId: string, newTitle: string) => void;
-  onToggleShared?: (listId: string) => void;
-  onToggleMinimized?: (listId: string) => void;
-  onCardClick?: (cardId: string) => void;
-  onToggleComplete?: (cardId: string) => void;
-  isArchiveView?: boolean;
+  actions: ListActions;
   searchQuery?: string;
 }
 
-export default function SortableList({
-  list,
-  onCreateCard,
-  onDeleteCard,
-  onArchiveList,
-  onMoveList,
-  onResize,
-  onResizeEnd,
-  onRenameList,
-  onToggleShared,
-  onToggleMinimized,
-  onCardClick,
-  onToggleComplete,
-  isArchiveView,
-  searchQuery,
-}: SortableListProps) {
+export default function SortableList({ list, actions, searchQuery }: SortableListProps) {
   const {
     attributes,
     listeners,
@@ -76,18 +50,7 @@ export default function SortableList({
     <div ref={setNodeRef} style={style} className="h-full">
       <List
         list={list}
-        onCreateCard={onCreateCard}
-        onDeleteCard={onDeleteCard}
-        onArchiveList={onArchiveList}
-        onMoveList={onMoveList}
-        onResize={onResize}
-        onResizeEnd={onResizeEnd}
-        onRenameList={onRenameList}
-        onToggleShared={onToggleShared}
-        onToggleMinimized={onToggleMinimized}
-        onCardClick={onCardClick}
-        onToggleComplete={onToggleComplete}
-        isArchiveView={isArchiveView}
+        actions={actions}
         searchQuery={searchQuery}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
